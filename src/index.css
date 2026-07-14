@@ -62,6 +62,40 @@ body {
       box-shadow: none !important;
     }
 
+    #printable-prescription,
+    #printable-certificate,
+    #printable-patient-summary,
+    #printable-consultation {
+      display: block !important;
+      position: static !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    #printable-prescription > div,
+    #printable-certificate > div,
+    #printable-patient-summary > div,
+    #printable-consultation > div {
+      box-shadow: none !important;
+      border: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    /* Professional print page size */
+    .print-page {
+      width: 210mm !important;
+      min-height: 297mm !important;
+      max-width: 210mm !important;
+      margin: 0 auto !important;
+      padding: 20mm !important;
+    }
+
     /* Keep page-breaks clean */
     .page-break {
       page-break-before: always;
@@ -83,10 +117,18 @@ body {
 :root {
   --color-primary: #3b82f6;
   --color-primary-hover: #2563eb;
+  --tooltip-bg: #ffffff;
+  --tooltip-border: #e2e8f0;
+  --tooltip-text: #0f172a;
+  --tooltip-cursor: #f1f5f9;
 }
 
 .dark {
   --color-primary: #60a5fa;
   --color-primary-hover: #3b82f6;
+  --tooltip-bg: #0f172a;
+  --tooltip-border: #1e293b;
+  --tooltip-text: #f8fafc;
+  --tooltip-cursor: #1e293b;
 }
 
