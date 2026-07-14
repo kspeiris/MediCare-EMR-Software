@@ -123,8 +123,8 @@ export function Dashboard() {
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dx={-10} />
                 <Tooltip 
-                  contentStyle={{ borderRadius: '6px', border: '1px solid #E2E8F0', fontSize: '12px', padding: '8px' }}
-                  cursor={{ fill: '#F1F5F9' }}
+                  contentStyle={{ borderRadius: '6px', border: '1px solid var(--tooltip-border)', backgroundColor: 'var(--tooltip-bg)', color: 'var(--tooltip-text)', fontSize: '12px', padding: '8px' }}
+                  cursor={{ fill: 'var(--tooltip-cursor)' }}
                 />
                 <Bar dataKey="visits" fill="#0284c7" radius={[2, 2, 0, 0]} barSize={12} />
               </BarChart>
@@ -136,7 +136,7 @@ export function Dashboard() {
         <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 flex flex-col">
           <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
             <h3 className="text-[14px] font-semibold text-slate-900 dark:text-white">Recent Activity Audit</h3>
-            <Link to="/logs" className="text-sky-505 text-[11px] font-semibold hover:underline">View Logs</Link>
+            <Link to="/logs" className="text-sky-600 dark:text-sky-400 text-[11px] font-semibold hover:underline">View Logs</Link>
           </div>
           <div className="flex-1 p-4 overflow-y-auto space-y-4 max-h-[256px]">
             {logs.slice(0, 5).map((activity, i) => (

@@ -149,8 +149,8 @@ export function Reports() {
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} dy={10} />
                   <YAxis hide />
                   <Tooltip 
-                    contentStyle={{ borderRadius: '4px', border: '1px solid #E2E8F0', fontSize: '11px', padding: '6px' }}
-                    cursor={{ fill: '#F1F5F9' }}
+                    contentStyle={{ borderRadius: '4px', border: '1px solid var(--tooltip-border)', backgroundColor: 'var(--tooltip-bg)', color: 'var(--tooltip-text)', fontSize: '11px', padding: '6px' }}
+                    cursor={{ fill: 'var(--tooltip-cursor)' }}
                   />
                   <Bar dataKey="consultations" fill="#0284c7" radius={[2, 2, 0, 0]} name="Consultations" />
                   <Bar dataKey="appointments" fill="#cbd5e1" radius={[2, 2, 0, 0]} name="Appointments" />
@@ -182,7 +182,7 @@ export function Reports() {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '4px' }} />
+                    <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '4px', border: '1px solid var(--tooltip-border)', backgroundColor: 'var(--tooltip-bg)', color: 'var(--tooltip-text)' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
