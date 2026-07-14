@@ -1,24 +1,30 @@
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { HeartPulse, Stethoscope, AlertTriangle, Printer, PlusCircle, Download, FileBadge, Trash2, Calendar, FileText, User } from 'lucide-react';
+import { HeartPulse, Stethoscope, AlertTriangle, Printer, PlusCircle, Download, FileBadge, Trash2, Calendar, FileText, User, Edit2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { useState, useMemo } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { db, Patient, Consultation, MedicalDocument, MedicalCertificate, Prescription } from '@/services/db';
+import { PatientSummaryPrintTemplate } from '@/components/print-templates/PatientSummaryPrintTemplate';
+import { generatePDF } from '@/components/print-templates/pdfExport';
 
 export function PatientProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const patient = db.getPatientById(id || '');
 
-  // Modals state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
   const [isUploadDocOpen, setIsUploadDocOpen] = useState(false);
+  const [isEditDocOpen, setIsEditDocOpen] = useState(false);
+  const [editingDoc, setEditingDoc] = useState<MedicalDocument | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
-  // Doc Upload Form
   const [docName, setDocName] = useState('');
   const [docType, setDocType] = useState('Laboratory Reports');
   const [docFileBase64, setDocFileBase64] = useState('');
+
+  const [editDocName, setEditDocName] = useState('');
+  const [editDocType, setEditDocType] = useState('Laboratory Reports');
 
   // Edit Patient Form State
   const [firstName, setFirstName] = useState(patient?.firstName || '');
@@ -172,8 +178,44 @@ export function PatientProfile() {
     }
   };
 
+  const handleEditDocClick = (doc: MedicalDocument) => {
+    setEditingDoc(doc);
+    setEditDocName(doc.name);
+    setEditDocType(doc.type);
+    setIsEditDocOpen(true);
+  };
+
+  const handleEditDocSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDoc) return;
+
+    db.updateDocument(editingDoc.id, {
+      name: editDocName,
+      type: editDocType
+    });
+
+    setIsEditDocOpen(false);
+    setEditingDoc(null);
+  };
+
   const printSummaryCard = () => {
     window.print();
+  };
+
+  const handleExportPDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const consultations = db.getConsultationsByPatient(patient.id);
+      const prescriptions = db.getPrescriptionsByPatient(patient.id);
+      const certificates = db.getCertificates().filter(c => c.patientId === patient.id);
+      const filename = `PatientSummary_${patient.firstName}_${patient.lastName}_${patient.id}`;
+      await generatePDF('printable-patient-summary', filename);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   return (
@@ -207,6 +249,14 @@ export function PatientProfile() {
           </div>
         </div>
         <div className="flex gap-2 no-print">
+          <button 
+            onClick={handleExportPDF}
+            disabled={isGeneratingPDF}
+            className="bg-white border border-slate-200 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200 text-slate-700 px-3 py-1.5 rounded text-[11px] hover:bg-slate-50 transition-colors font-semibold flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Download size={14} />
+            {isGeneratingPDF ? 'Generating...' : 'Export PDF'}
+          </button>
           <button 
             onClick={printSummaryCard}
             className="bg-white border border-slate-200 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-200 text-slate-700 px-3 py-1.5 rounded text-[11px] hover:bg-slate-50 transition-colors font-semibold flex items-center gap-1.5"
@@ -301,10 +351,11 @@ export function PatientProfile() {
                       <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[160px]">{doc.name}</div>
                       <div className="text-[10px] text-slate-400">{doc.type} • {doc.uploadDate}</div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <a href={doc.fileData} download={doc.name} className="text-sky-500 hover:text-sky-700 p-1"><Download size={13} /></a>
-                      <button onClick={() => handleDeleteDoc(doc.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={13} /></button>
-                    </div>
+                     <div className="flex items-center gap-2">
+                       <a href={doc.fileData} download={doc.name} className="text-sky-500 hover:text-sky-700 p-1"><Download size={13} /></a>
+                       <button onClick={() => handleEditDocClick(doc)} className="text-slate-400 hover:text-slate-600 p-1"><Edit2 size={13} /></button>
+                       <button onClick={() => handleDeleteDoc(doc.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={13} /></button>
+                     </div>
                   </div>
                 ))
               ) : (
@@ -515,6 +566,64 @@ export function PatientProfile() {
           </div>
         </form>
       </Modal>
+
+      <Modal isOpen={isEditDocOpen} onClose={() => setIsEditDocOpen(false)} title="Edit Document">
+        <form onSubmit={handleEditDocSubmit} className="space-y-4">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Document Title / Name</label>
+            <input value={editDocName} onChange={(e) => setEditDocName(e.target.value)} type="text" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[13px] outline-none text-slate-900 dark:text-slate-100" placeholder="e.g. Blood Report Oct 2025" />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Document Category</label>
+            <select value={editDocType} onChange={(e) => setEditDocType(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[13px] outline-none text-slate-900 dark:text-slate-100">
+              <option value="Laboratory Reports">Laboratory Reports</option>
+              <option value="X-ray Reports">X-ray Reports</option>
+              <option value="MRI Reports">MRI/CT Scan Reports</option>
+              <option value="ECG Reports">ECG Reports</option>
+              <option value="Ultrasound Reports">Ultrasound Reports</option>
+              <option value="Other Documents">Other Documents</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onClick={() => setIsUploadDocOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-650 dark:text-slate-400">Cancel</button>
+            <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Upload File</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isEditDocOpen} onClose={() => setIsEditDocOpen(false)} title="Edit Document">
+        <form onSubmit={handleEditDocSubmit} className="space-y-4">
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Document Title / Name</label>
+            <input value={editDocName} onChange={(e) => setEditDocName(e.target.value)} type="text" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[13px] outline-none text-slate-900 dark:text-slate-100" placeholder="e.g. Blood Report Oct 2025" />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Document Category</label>
+            <select value={editDocType} onChange={(e) => setEditDocType(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[13px] outline-none text-slate-900 dark:text-slate-100">
+              <option value="Laboratory Reports">Laboratory Reports</option>
+              <option value="X-ray Reports">X-ray Reports</option>
+              <option value="MRI Reports">MRI/CT Scan Reports</option>
+              <option value="ECG Reports">ECG Reports</option>
+              <option value="Ultrasound Reports">Ultrasound Reports</option>
+              <option value="Other Documents">Other Documents</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onClick={() => setIsEditDocOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-600 dark:text-slate-400">Cancel</button>
+            <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Save Changes</button>
+          </div>
+        </form>
+      </Modal>
+
+      <div id="printable-patient-summary" className="hidden">
+        <PatientSummaryPrintTemplate
+          patient={patient}
+          consultations={db.getConsultationsByPatient(patient.id)}
+          prescriptions={db.getPrescriptionsByPatient(patient.id)}
+          certificates={db.getCertificates().filter(c => c.patientId === patient.id)}
+          doctor={db.getDoctorProfile()}
+        />
+      </div>
     </div>
   );
 }

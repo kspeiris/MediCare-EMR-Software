@@ -1,25 +1,36 @@
 import { useState, useMemo } from 'react';
 import { Table, Th, Td } from '@/components/ui/Table';
 import { Modal } from '@/components/ui/Modal';
-import { Search, PlusCircle, Printer } from 'lucide-react';
+import { Search, PlusCircle, Printer, Edit2, Trash2, Download } from 'lucide-react';
 import { db, MedicalCertificate, Patient } from '@/services/db';
+import { CertificatePrintTemplate } from '@/components/print-templates/CertificatePrintTemplate';
+import { generatePDF } from '@/components/print-templates/pdfExport';
 
 export function Certificates() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingCert, setEditingCert] = useState<MedicalCertificate | null>(null);
   const [certificates, setCertificates] = useState<MedicalCertificate[]>(() => db.getCertificates());
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   
   const patients = db.getPatients();
   const doc = db.getDoctorProfile();
 
-  // Form states
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [restPeriod, setRestPeriod] = useState('3 Days');
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [doctorRemarks, setDoctorRemarks] = useState('');
 
-  // Certificate print preview
+  const [editForm, setEditForm] = useState({
+    patientId: '',
+    diagnosis: '',
+    restPeriod: '3 Days',
+    issueDate: '',
+    doctorRemarks: ''
+  });
+
   const [printCert, setPrintCert] = useState<MedicalCertificate | null>(null);
 
   const enrichedCertificates = useMemo(() => {
@@ -55,19 +66,68 @@ export function Certificates() {
 
     setCertificates(db.getCertificates());
     
-    // Reset Form
     setSelectedPatientId('');
     setDiagnosis('');
     setRestPeriod('3 Days');
     setDoctorRemarks('');
     setIsModalOpen(false);
 
-    // Open print preview immediately
     setPrintCert(newCert);
+  };
+
+  const handleEditClick = (cert: MedicalCertificate) => {
+    setEditingCert(cert);
+    setEditForm({
+      patientId: cert.patientId,
+      diagnosis: cert.diagnosis,
+      restPeriod: cert.restPeriod,
+      issueDate: cert.issueDate,
+      doctorRemarks: cert.doctorRemarks || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCert || !editForm.diagnosis) return;
+
+    db.updateCertificate(editingCert.id, {
+      patientId: editForm.patientId,
+      diagnosis: editForm.diagnosis,
+      restPeriod: editForm.restPeriod,
+      issueDate: editForm.issueDate,
+      doctorRemarks: editForm.doctorRemarks
+    });
+
+    setCertificates(db.getCertificates());
+    setIsEditModalOpen(false);
+    setEditingCert(null);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this medical certificate? This cannot be undone.")) {
+      db.deleteCertificate(id);
+      setCertificates(db.getCertificates());
+    }
   };
 
   const handlePrintAction = () => {
     window.print();
+  };
+
+  const handleExportPDF = async () => {
+    if (!printCert) return;
+    setIsGeneratingPDF(true);
+    try {
+      const patientObj = patients.find(p => p.id === printCert.patientId);
+      const filename = `Certificate_${printCert.id}_${patientObj?.firstName || 'Patient'}_${patientObj?.lastName || ''}`;
+      await generatePDF('printable-certificate', filename);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   return (
@@ -86,68 +146,28 @@ export function Certificates() {
         </button>
       </div>
 
-      {/* Print Preview Modal */}
       <Modal isOpen={!!printCert} onClose={() => setPrintCert(null)} title="Medical Certificate Print Preview">
         {printCert && (
           <div className="space-y-6">
-            <div className="p-8 border border-slate-300 rounded bg-white text-slate-950 font-sans print-container text-center space-y-6" id="printable-certificate">
-              <div className="border-b border-slate-350 pb-4 flex justify-between items-start text-left">
-                <div>
-                  <h2 className="text-lg font-black text-slate-900">{doc.clinicName}</h2>
-                  <p className="text-[11px] text-slate-500">{doc.clinicAddress}</p>
-                </div>
-                <div className="text-right">
-                  <h3 className="text-sm font-bold text-slate-800">{doc.name}</h3>
-                  <p className="text-[9px] text-slate-400">Reg: {doc.regNumber}</p>
-                </div>
-              </div>
-
-              <h1 className="text-2xl font-serif font-black uppercase tracking-widest text-slate-900 pt-4">Medical Certificate</h1>
-
-              {(() => {
-                const patientObj = patients.find(p => p.id === printCert.patientId);
-                return patientObj ? (
-                  <div className="space-y-6 text-sm text-left max-w-lg mx-auto pt-4 leading-loose">
-                    <p>
-                      This is to certify that I have professionally examined <strong>{patientObj.firstName} {patientObj.lastName}</strong>, 
-                      age <strong>{new Date().getFullYear() - new Date(patientObj.dob).getFullYear()}</strong>, 
-                      gender <strong>{patientObj.gender}</strong>, on date <strong>{printCert.issueDate}</strong>.
-                    </p>
-                    <p>
-                      In my clinical opinion, the patient is diagnosed with <strong>{printCert.diagnosis}</strong> and requires 
-                      a rest period of <strong>{printCert.restPeriod}</strong> for recovery.
-                    </p>
-                    {printCert.doctorRemarks && (
-                      <p className="border-l-2 border-slate-200 pl-3 italic text-slate-600">
-                        Remarks: {printCert.doctorRemarks}
-                      </p>
-                    )}
-                  </div>
-                ) : null;
-              })()}
-
-              <div className="pt-10 flex justify-between items-end text-left max-w-lg mx-auto">
-                <div>
-                  <p className="text-[11px] text-slate-400">Issue Date: {printCert.issueDate}</p>
-                  <p className="text-[11px] text-slate-450">Certificate ID: {printCert.id}</p>
-                </div>
-                <div className="text-center w-40">
-                  {doc.signature ? (
-                    <img src={doc.signature} alt="Signature" className="h-10 mx-auto object-contain mb-1" />
-                  ) : (
-                    <div className="h-10 border-b border-slate-200 border-dashed mb-1"></div>
-                  )}
-                  <span className="text-[11px] font-bold text-slate-850 block leading-tight">{doc.name}</span>
-                  <span className="text-[9px] text-slate-400 font-semibold uppercase">Registered Medical Officer</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 no-print">
-              <button onClick={() => setPrintCert(null)} className="px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-400">Close</button>
-              <button onClick={handlePrintAction} className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1">
-                <Printer size={14} /> Print Certificate
+            <div className="flex justify-end gap-2 mb-4 no-print">
+              <button
+                onClick={handleExportPDF}
+                disabled={isGeneratingPDF}
+                className="px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 rounded hover:bg-slate-50 flex items-center gap-1 disabled:opacity-50"
+              >
+                <Download size={14} />
+                {isGeneratingPDF ? 'Generating PDF...' : 'Export PDF'}
               </button>
+              <button onClick={handlePrintAction} className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1">
+                <Printer size={14} /> Print
+              </button>
+            </div>
+            <div id="printable-certificate" className="hidden">
+              <CertificatePrintTemplate
+                certificate={printCert}
+                patient={patients.find(p => p.id === printCert.patientId)}
+                doctor={doc}
+              />
             </div>
           </div>
         )}
@@ -194,6 +214,47 @@ export function Certificates() {
         </form>
       </Modal>
 
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Medical Certificate">
+        <form className="space-y-4" onSubmit={handleEditSubmit}>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Patient</label>
+            <select 
+              value={editForm.patientId} 
+              onChange={(e) => setEditForm({...editForm, patientId: e.target.value})} 
+              required
+              className="w-full px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none"
+            >
+              <option value="">Select Patient</option>
+              {patients.map(p => (
+                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.id})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Diagnosis / Reason</label>
+            <input value={editForm.diagnosis} onChange={(e) => setEditForm({...editForm, diagnosis: e.target.value})} type="text" className="w-full px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="Diagnosis requiring rest period..." required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Rest Period (e.g. 3 Days)</label>
+              <input value={editForm.restPeriod} onChange={(e) => setEditForm({...editForm, restPeriod: e.target.value})} type="text" className="w-full px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" required />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Date Issued</label>
+              <input value={editForm.issueDate} onChange={(e) => setEditForm({...editForm, issueDate: e.target.value})} type="date" className="w-full px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" required />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Doctor's Remarks (Optional)</label>
+            <textarea value={editForm.doctorRemarks} onChange={(e) => setEditForm({...editForm, doctorRemarks: e.target.value})} className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none min-h-[80px]"></textarea>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+            <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 transition-colors">Update Certificate</button>
+          </div>
+        </form>
+      </Modal>
+
       <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 flex flex-col no-print">
         <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
           <h3 className="text-[14px] font-semibold text-slate-900 dark:text-white">Recent Certificates</h3>
@@ -230,9 +291,17 @@ export function Certificates() {
                   <Td>{cert.restPeriod}</Td>
                   <Td>{cert.issueDate}</Td>
                   <Td className="text-right">
-                    <button onClick={() => setPrintCert(cert)} className="p-1 text-sky-550 hover:text-sky-700 transition-colors inline-flex items-center gap-1 text-xs font-semibold">
-                      <Printer size={13} /> Print View
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => setPrintCert(cert)} className="p-1 text-sky-500 hover:text-sky-700 transition-colors inline-flex items-center gap-1 text-xs font-semibold">
+                        <Printer size={13} /> Print
+                      </button>
+                      <button onClick={() => handleEditClick(cert)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors inline-flex items-center gap-1 text-xs font-semibold">
+                        <Edit2 size={13} /> Edit
+                      </button>
+                      <button onClick={() => handleDelete(cert.id)} className="p-1 text-red-400 hover:text-red-600 transition-colors inline-flex items-center gap-1 text-xs font-semibold">
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </div>
                   </Td>
                 </tr>
               ))
@@ -249,4 +318,3 @@ export function Certificates() {
     </div>
   );
 }
-

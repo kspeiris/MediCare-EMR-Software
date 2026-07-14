@@ -287,7 +287,7 @@ export const db = {
   getPatientById: (id: string): Patient | undefined => db.getPatients().find(p => p.id === id),
   addPatient: (patient: Omit<Patient, 'id' | 'createdAt'>): Patient => {
     const patients = db.getPatients();
-    const id = `PT-${8000 + patients.length + 1}`;
+    const id = `PT-${Date.now().toString(36).toUpperCase()}`;
     const newPatient: Patient = {
       ...patient,
       id,
@@ -319,7 +319,7 @@ export const db = {
     db.getConsultations().filter(c => c.patientId === patientId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
   addConsultation: (consultation: Omit<Consultation, 'id' | 'createdAt'>): Consultation => {
     const consultations = db.getConsultations();
-    const id = `CNS-${1000 + consultations.length + 1}`;
+    const id = `CNS-${Date.now().toString(36).toUpperCase()}`;
     const newConsultation: Consultation = {
       ...consultation,
       id,
@@ -329,6 +329,20 @@ export const db = {
     db.logActivity('Consultation Added', `Added consultation record (${id}) for patient ID: ${consultation.patientId}`);
     return newConsultation;
   },
+  updateConsultation: (id: string, updatedFields: Partial<Consultation>) => {
+    const consultations = db.getConsultations();
+    const index = consultations.findIndex(c => c.id === id);
+    if (index !== -1) {
+      consultations[index] = { ...consultations[index], ...updatedFields };
+      db.saveConsultations(consultations);
+      db.logActivity('Consultation Update', `Updated consultation record (${id})`);
+    }
+  },
+  deleteConsultation: (id: string) => {
+    const consultations = db.getConsultations().filter(c => c.id !== id);
+    db.saveConsultations(consultations);
+    db.logActivity('Consultation Deleted', `Deleted consultation record (${id})`);
+  },
 
   // Prescriptions
   getPrescriptions: (): Prescription[] => getStorageItem('emr_prescriptions', []),
@@ -337,11 +351,25 @@ export const db = {
     db.getPrescriptions().filter(p => p.patientId === patientId),
   addPrescription: (prescription: Omit<Prescription, 'id'>): Prescription => {
     const prescriptions = db.getPrescriptions();
-    const id = `RX-${5000 + prescriptions.length + 1}`;
-    const newPrescription: Prescription = { ...prescription, id };
+    const id = `RX-${Date.now().toString(36).toUpperCase()}`;
+    const newPrescription = { ...prescription, id };
     db.savePrescriptions([newPrescription, ...prescriptions]);
     db.logActivity('Prescription Printed', `Generated prescription ${id} for patient ID: ${prescription.patientId}`);
     return newPrescription;
+  },
+  updatePrescription: (id: string, updatedFields: Partial<Prescription>) => {
+    const prescriptions = db.getPrescriptions();
+    const index = prescriptions.findIndex(p => p.id === id);
+    if (index !== -1) {
+      prescriptions[index] = { ...prescriptions[index], ...updatedFields };
+      db.savePrescriptions(prescriptions);
+      db.logActivity('Prescription Updated', `Updated prescription (${id})`);
+    }
+  },
+  deletePrescription: (id: string) => {
+    const prescriptions = db.getPrescriptions().filter(p => p.id !== id);
+    db.savePrescriptions(prescriptions);
+    db.logActivity('Prescription Deleted', `Deleted prescription (${id})`);
   },
 
   // Appointments
@@ -349,7 +377,7 @@ export const db = {
   saveAppointments: (appointments: Appointment[]) => setStorageItem('emr_appointments', appointments),
   addAppointment: (apt: Omit<Appointment, 'id'>): Appointment => {
     const appointments = db.getAppointments();
-    const id = `APT-${100 + appointments.length + 1}`;
+    const id = `APT-${Date.now().toString(36).toUpperCase()}`;
     const newApt = { ...apt, id };
     db.saveAppointments([...appointments, newApt]);
     db.logActivity('Appointment Scheduled', `Scheduled appointment for patient ID: ${apt.patientId} on ${apt.date}`);
@@ -364,17 +392,45 @@ export const db = {
       db.logActivity('Appointment Scheduled', `Updated appointment ${id} status to ${status}`);
     }
   },
+  updateAppointment: (id: string, updatedFields: Partial<Appointment>) => {
+    const appointments = db.getAppointments();
+    const index = appointments.findIndex(a => a.id === id);
+    if (index !== -1) {
+      appointments[index] = { ...appointments[index], ...updatedFields };
+      db.saveAppointments(appointments);
+      db.logActivity('Appointment Updated', `Updated appointment (${id})`);
+    }
+  },
+  deleteAppointment: (id: string) => {
+    const appointments = db.getAppointments().filter(a => a.id !== id);
+    db.saveAppointments(appointments);
+    db.logActivity('Appointment Deleted', `Deleted appointment (${id})`);
+  },
 
   // Medical Certificates
   getCertificates: (): MedicalCertificate[] => getStorageItem('emr_certificates', []),
   saveCertificates: (certs: MedicalCertificate[]) => setStorageItem('emr_certificates', certs),
   addCertificate: (cert: Omit<MedicalCertificate, 'id'>): MedicalCertificate => {
     const certs = db.getCertificates();
-    const id = `MC-${3000 + certs.length + 1}`;
+    const id = `MC-${Date.now().toString(36).toUpperCase()}`;
     const newCert = { ...cert, id };
     db.saveCertificates([newCert, ...certs]);
     db.logActivity('Certificate Generated', `Issued medical certificate ${id} for patient ID: ${cert.patientId}`);
     return newCert;
+  },
+  updateCertificate: (id: string, updatedFields: Partial<MedicalCertificate>) => {
+    const certs = db.getCertificates();
+    const index = certs.findIndex(c => c.id === id);
+    if (index !== -1) {
+      certs[index] = { ...certs[index], ...updatedFields };
+      db.saveCertificates(certs);
+      db.logActivity('Certificate Updated', `Updated medical certificate (${id})`);
+    }
+  },
+  deleteCertificate: (id: string) => {
+    const certs = db.getCertificates().filter(c => c.id !== id);
+    db.saveCertificates(certs);
+    db.logActivity('Certificate Deleted', `Deleted medical certificate (${id})`);
   },
 
   // Documents
@@ -384,7 +440,7 @@ export const db = {
     db.getDocuments().filter(d => d.patientId === patientId),
   addDocument: (doc: Omit<MedicalDocument, 'id' | 'uploadDate'>): MedicalDocument => {
     const docs = db.getDocuments();
-    const id = `DOC-${2000 + docs.length + 1}`;
+    const id = `DOC-${Date.now().toString(36).toUpperCase()}`;
     const newDoc = { ...doc, id, uploadDate: new Date().toISOString().split('T')[0] };
     db.saveDocuments([newDoc, ...docs]);
     db.logActivity('Patient Update', `Uploaded document "${doc.name}" for patient ID: ${doc.patientId}`);
@@ -394,6 +450,15 @@ export const db = {
     const docs = db.getDocuments().filter(d => d.id !== id);
     db.saveDocuments(docs);
     db.logActivity('Patient Update', `Removed document ID: ${id}`);
+  },
+  updateDocument: (id: string, updatedFields: Partial<MedicalDocument>) => {
+    const docs = db.getDocuments();
+    const index = docs.findIndex(d => d.id === id);
+    if (index !== -1) {
+      docs[index] = { ...docs[index], ...updatedFields };
+      db.saveDocuments(docs);
+      db.logActivity('Document Updated', `Updated document (${id})`);
+    }
   },
 
   // Security & Logs

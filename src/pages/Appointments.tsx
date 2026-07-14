@@ -1,4 +1,4 @@
-import { Calendar as CalendarIcon, Clock, MoreVertical, SlidersHorizontal, CheckCircle2, CalendarRange, User } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, SlidersHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useMemo } from 'react';
 import { Modal } from '@/components/ui/Modal';
@@ -7,20 +7,28 @@ import { Badge } from '@/components/ui/Badge';
 
 export function Appointments() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingApt, setEditingApt] = useState<Appointment | null>(null);
   const [viewMode, setViewMode] = useState('Month');
   
   const [appointments, setAppointments] = useState<Appointment[]>(() => db.getAppointments());
   const patients = db.getPatients();
   const doc = db.getDoctorProfile();
 
-  // Form states
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState('09:00');
   const [reason, setReason] = useState('Routine Checkup');
   const [notes, setNotes] = useState('');
 
-  // Filters state
+  const [editForm, setEditForm] = useState({
+    patientId: '',
+    date: '',
+    time: '09:00',
+    reason: 'Routine Checkup',
+    notes: ''
+  });
+
   const [statusFilter, setStatusFilter] = useState('All');
 
   const enrichedAppointments = useMemo(() => {
@@ -63,6 +71,42 @@ export function Appointments() {
     setAppointments(db.getAppointments());
   };
 
+  const handleEditClick = (apt: Appointment) => {
+    setEditingApt(apt);
+    setEditForm({
+      patientId: apt.patientId,
+      date: apt.date,
+      time: apt.time,
+      reason: apt.reason,
+      notes: apt.notes
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingApt || !editForm.patientId || !editForm.date || !editForm.time) return;
+
+    db.updateAppointment(editingApt.id, {
+      patientId: editForm.patientId,
+      date: editForm.date,
+      time: editForm.time,
+      reason: editForm.reason,
+      notes: editForm.notes
+    });
+
+    setAppointments(db.getAppointments());
+    setIsEditModalOpen(false);
+    setEditingApt(null);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this appointment? This cannot be undone.")) {
+      db.deleteAppointment(id);
+      setAppointments(db.getAppointments());
+    }
+  };
+
   return (
     <div className="p-5 space-y-4">
       <div className="flex justify-between items-center no-print">
@@ -86,7 +130,7 @@ export function Appointments() {
               value={selectedPatientId}
               onChange={(e) => setSelectedPatientId(e.target.value)}
               required
-              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-slate-100 text-[13px] outline-none"
+              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none"
             >
               <option value="">Select Patient</option>
               {patients.map(p => (
@@ -97,24 +141,65 @@ export function Appointments() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Date</label>
-              <input value={date} onChange={(e) => setDate(e.target.value)} type="date" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              <input value={date} onChange={(e) => setDate(e.target.value)} type="date" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
             </div>
             <div>
               <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Time</label>
-              <input value={time} onChange={(e) => setTime(e.target.value)} type="time" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              <input value={time} onChange={(e) => setTime(e.target.value)} type="time" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
             </div>
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Reason for Visit</label>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} type="text" placeholder="e.g. Follow-up consultation" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-slate-100 text-[13px] outline-none" required />
+            <input value={reason} onChange={(e) => setReason(e.target.value)} type="text" placeholder="e.g. Follow-up consultation" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" required />
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Doctor Remarks / Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-955 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="Special symptoms or requirements..."></textarea>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="Special symptoms or requirements..."></textarea>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
             <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 transition-colors">Schedule Visit</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Appointment">
+        <form className="space-y-4" onSubmit={handleEditSubmit}>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Patient</label>
+            <select 
+              value={editForm.patientId}
+              onChange={(e) => setEditForm({...editForm, patientId: e.target.value})}
+              required
+              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none"
+            >
+              <option value="">Select Patient</option>
+              {patients.map(p => (
+                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.id})</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Date</label>
+              <input value={editForm.date} onChange={(e) => setEditForm({...editForm, date: e.target.value})} type="date" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Time</label>
+              <input value={editForm.time} onChange={(e) => setEditForm({...editForm, time: e.target.value})} type="time" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Reason for Visit</label>
+            <input value={editForm.reason} onChange={(e) => setEditForm({...editForm, reason: e.target.value})} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" required />
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Doctor Remarks / Notes</label>
+            <textarea value={editForm.notes} onChange={(e) => setEditForm({...editForm, notes: e.target.value})} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="Special symptoms or requirements..."></textarea>
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
+            <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 transition-colors">Update Appointment</button>
           </div>
         </form>
       </Modal>
@@ -133,7 +218,7 @@ export function Appointments() {
               <select 
                 value={statusFilter} 
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-2 py-1.5 text-[12px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded outline-none text-slate-805 dark:text-slate-150"
+                className="w-full px-2 py-1.5 text-[12px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded outline-none text-slate-800 dark:text-slate-150"
               >
                 <option value="All">All Statuses</option>
                 <option value="Scheduled">Scheduled</option>
@@ -183,6 +268,20 @@ export function Appointments() {
                         </button>
                       </div>
                     )}
+                    <div className="mt-2 flex gap-1">
+                      <button 
+                        onClick={() => handleEditClick(apt)}
+                        className="text-[10px] text-sky-500 hover:text-sky-700 font-semibold flex items-center gap-0.5"
+                      >
+                        <Edit2 size={10} /> Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(apt.id)}
+                        className="text-[10px] text-red-500 hover:text-red-700 font-semibold flex items-center gap-0.5"
+                      >
+                        <Trash2 size={10} /> Delete
+                      </button>
+                    </div>
                   </div>
                 ))
               ) : (
@@ -196,7 +295,7 @@ export function Appointments() {
         <div className="col-span-12 lg:col-span-8 bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 flex flex-col print-container">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
              <div className="flex items-center gap-3">
-               <h3 className="text-[15px] font-bold text-slate-900 dark:text-white uppercase tracking-wide">Monthly Agenda View</h3>
+                <h3 className="text-[15px] font-bold text-slate-900 dark:text-white uppercase tracking-wide">Monthly Agenda View</h3>
              </div>
              <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 no-print">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Completed</span>
@@ -216,7 +315,6 @@ export function Appointments() {
                const isCurrentMonth = dayNum > 0 && dayNum <= 31;
                const isToday = dayNum === new Date().getDate();
                
-               // Find appointments on this day of current month
                const dayApts = isCurrentMonth ? enrichedAppointments.filter(a => {
                  const aptDay = parseInt(a.date.split('-')[2], 10);
                  return aptDay === dayNum;
@@ -231,23 +329,23 @@ export function Appointments() {
                         </span>
                         <div className="space-y-1">
                           {dayApts.slice(0, 2).map(apt => (
-                            <div 
-                              key={apt.id} 
-                              className={cn(
-                                "text-[9px] px-1 py-0.5 rounded truncate font-medium",
-                                apt.status === 'Completed' 
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-l-2 border-emerald-500' 
-                                  : apt.status === 'Cancelled'
-                                  ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 line-through border-l-2 border-red-400'
-                                  : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-l-2 border-amber-500'
-                              )}
-                            >
-                              {apt.time} {apt.patientName.split(' ')[0]}
-                            </div>
-                          ))}
-                          {dayApts.length > 2 && (
-                            <span className="text-[8px] text-slate-400 pl-1 font-semibold">+{dayApts.length - 2} more</span>
-                          )}
+                             <div 
+                               key={apt.id} 
+                               className={cn(
+                                 "text-[9px] px-1 py-0.5 rounded truncate font-medium",
+                                 apt.status === 'Completed' 
+                                   ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-l-2 border-emerald-500' 
+                                   : apt.status === 'Cancelled'
+                                   ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 line-through border-l-2 border-red-400'
+                                   : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-l-2 border-amber-500'
+                               )}
+                             >
+                               {apt.time} {apt.patientName.split(' ')[0]}
+                             </div>
+                           ))}
+                           {dayApts.length > 2 && (
+                             <span className="text-[8px] text-slate-400 pl-1 font-semibold">+{dayApts.length - 2} more</span>
+                           )}
                         </div>
                       </div>
                     )}
