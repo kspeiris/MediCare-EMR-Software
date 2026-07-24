@@ -1,12 +1,17 @@
 import { Card } from '@/components/ui/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Download, Table2, CheckCircle2 } from 'lucide-react';
+import { Download, Table2, CheckCircle2, FileText } from 'lucide-react';
 import { Table, Th, Td } from '@/components/ui/Table';
 import { useState, useMemo } from 'react';
 import { db } from '@/services/db';
+import { Modal } from '@/components/ui/Modal';
+import { generatePDF } from '@/components/print-templates/pdfExport';
+import { ReportPrintTemplate } from '@/components/print-templates/ReportPrintTemplate';
 
 export function Reports() {
   const [isExporting, setIsExporting] = useState(false);
+  const [previewReport, setPreviewReport] = useState<{ type: 'summary' | 'patients' | 'consultations'; title: string } | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const patients = db.getPatients();
   const consultations = db.getConsultations();
@@ -110,6 +115,30 @@ export function Reports() {
     }, 800);
   };
 
+  const enrichedConsultations = useMemo(() => {
+    return consultations.map(c => {
+      const p = patients.find(pat => pat.id === c.patientId);
+      return {
+        ...c,
+        patientName: p ? `${p.firstName} ${p.lastName}` : 'Unknown'
+      };
+    });
+  }, [consultations, patients]);
+
+  const handleExportPDF = async () => {
+    if (!previewReport) return;
+    setIsGeneratingPDF(true);
+    try {
+      const filename = `${previewReport.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+      await generatePDF('printable-report-area', filename);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   return (
     <div className="p-5 space-y-4">
       <div className="flex justify-between items-center">
@@ -118,6 +147,13 @@ export function Reports() {
           <p className="text-[12px] text-slate-500 mt-0.5">Comprehensive overview of clinic performance and patient metrics.</p>
         </div>
         <div className="flex gap-2">
+          <button 
+            onClick={() => setPreviewReport({ type: 'summary', title: 'General Clinic Summary' })}
+            className="bg-sky-500 text-white px-3 py-1.5 rounded text-[12px] hover:bg-sky-600 transition-colors flex items-center gap-1.5 font-semibold cursor-pointer"
+          >
+            <FileText size={14} />
+            Review Summary PDF
+          </button>
           <button 
             onClick={() => handleCSVExport('summary')}
             disabled={isExporting}
@@ -220,9 +256,10 @@ export function Reports() {
                     <div className="text-[10px] text-slate-500">{report.desc}</div>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <button onClick={() => handleCSVExport(report.type)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all" title="Generate CSV"><Table2 size={14}/></button>
-                </div>
+                 <div className="flex gap-1">
+                    <button onClick={() => setPreviewReport({ type: report.type as any, title: report.title })} className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950 rounded transition-all cursor-pointer" title="Review & Download PDF"><FileText size={14}/></button>
+                   <button onClick={() => handleCSVExport(report.type)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 rounded transition-all cursor-pointer" title="Generate CSV"><Table2 size={14}/></button>
+                 </div>
              </div>
            ))}
          </div>
@@ -255,6 +292,49 @@ export function Reports() {
             </Table>
          </div>
       </div>
+
+      <Modal 
+        isOpen={!!previewReport} 
+        onClose={() => setPreviewReport(null)} 
+        title={`Review Report - ${previewReport?.title}`}
+        className="max-w-4xl"
+      >
+        {previewReport && (
+          <div className="space-y-4">
+            <div className="flex justify-end gap-2 mb-2 no-print">
+              <button
+                onClick={handleExportPDF}
+                disabled={isGeneratingPDF}
+                className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                <Download size={14} />
+                {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
+              </button>
+            </div>
+            
+            <div className="bg-slate-100 dark:bg-slate-950 p-6 rounded-lg max-h-[60vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
+              <div id="printable-report-area" className="bg-white text-slate-900 shadow-sm mx-auto">
+                <ReportPrintTemplate
+                  type={previewReport.type}
+                  doctor={db.getDoctorProfile()}
+                  data={{
+                    summary: {
+                      totalConsultations,
+                      totalPatients,
+                      topDiagnosis,
+                      upcomingFollowups,
+                      demographicsData: demographicsData.map(d => ({ name: d.name, value: d.value })),
+                      revenueData
+                    },
+                    patients,
+                    consultations: enrichedConsultations
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
