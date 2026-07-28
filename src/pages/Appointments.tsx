@@ -1,22 +1,78 @@
 import { Calendar as CalendarIcon, Clock, SlidersHorizontal, Edit2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState, useMemo } from 'react';
+import { getLocalDate } from '@/lib/dates';
+import { useState, useMemo, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { db, Appointment, Patient } from '@/services/db';
 import { Badge } from '@/components/ui/Badge';
+import { onDbChange } from '@/services/db';
 
 export function Appointments() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingApt, setEditingApt] = useState<Appointment | null>(null);
   const [viewMode, setViewMode] = useState('Month');
-  
-  const [appointments, setAppointments] = useState<Appointment[]>(() => db.getAppointments());
-  const patients = db.getPatients();
-  const doc = db.getDoctorProfile();
+
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [doc, setDoc] = useState<{ name: string; regNumber: string; specialization: string; clinicName: string; clinicAddress: string; phone: string; email: string; role?: string }>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'admin' });
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+
+  const loadData = async () => {
+    const [apts, pats, d] = await Promise.all([
+      db.getAppointments(),
+      db.getPatients(),
+      db.getDoctorProfile()
+    ]);
+    setAppointments(apts);
+    setPatients(pats);
+    setDoc(d);
+  };
+
+  useEffect(() => {
+    loadData();
+    const unsub1 = onDbChange('appointments:changed', loadData);
+    const unsub2 = onDbChange('patients:changed', loadData);
+    return () => { unsub1(); unsub2(); };
+  }, []);
+
+  const calendarDays = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const startDayOfWeek = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+    
+    const days = [];
+    
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      const d = daysInPrevMonth - i;
+      const prevMonth = month === 0 ? 11 : month - 1;
+      const prevYear = month === 0 ? year - 1 : year;
+      const dateString = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      days.push({ day: d, isCurrentMonth: false, dateString });
+    }
+    
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      days.push({ day: d, isCurrentMonth: true, dateString });
+    }
+    
+    const totalCells = days.length <= 35 ? 35 : 42;
+    const nextDaysCount = totalCells - days.length;
+    for (let d = 1; d <= nextDaysCount; d++) {
+      const nextMonth = month === 11 ? 0 : month + 1;
+      const nextYear = month === 11 ? year + 1 : year;
+      const dateString = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      days.push({ day: d, isCurrentMonth: false, dateString });
+    }
+    
+    return days;
+  }, [currentDate]);
 
   const [selectedPatientId, setSelectedPatientId] = useState('');
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => getLocalDate());
   const [time, setTime] = useState('09:00');
   const [reason, setReason] = useState('Routine Checkup');
   const [notes, setNotes] = useState('');
@@ -47,28 +103,39 @@ export function Appointments() {
     return enrichedAppointments.filter(a => a.status === statusFilter);
   }, [enrichedAppointments, statusFilter]);
 
-  const handleSchedule = (e: React.FormEvent) => {
+  const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatientId || !date || !time) return;
 
-    db.addAppointment({
-      patientId: selectedPatientId,
-      date,
-      time,
-      reason,
-      status: 'Scheduled',
-      notes
-    });
-
-    setAppointments(db.getAppointments());
-    setSelectedPatientId('');
-    setNotes('');
-    setIsModalOpen(false);
+    try {
+      await db.addAppointment({
+        patientId: selectedPatientId,
+        date,
+        time,
+        reason,
+        status: 'Scheduled',
+        notes
+      });
+      await loadData();
+      setSelectedPatientId('');
+      setNotes('');
+      setIsModalOpen(false);
+    } catch (err: any) {
+      alert(err.message || 'Failed to schedule appointment. Please try again.');
+    }
   };
 
-  const handleUpdateStatus = (id: string, status: Appointment['status']) => {
-    db.updateAppointmentStatus(id, status);
-    setAppointments(db.getAppointments());
+  const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
+    const updates: Partial<Appointment> = { status };
+    if (status === 'Completed') {
+      const allApts = await db.getAppointments();
+      const existing = allApts.find(a => a.id === id);
+      updates.notes = existing?.notes
+        ? existing.notes + ' | Checked in: ' + new Date().toLocaleString()
+        : 'Checked in: ' + new Date().toLocaleString();
+    }
+    await db.updateAppointment(id, updates);
+    await loadData();
   };
 
   const handleEditClick = (apt: Appointment) => {
@@ -83,11 +150,11 @@ export function Appointments() {
     setIsEditModalOpen(true);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingApt || !editForm.patientId || !editForm.date || !editForm.time) return;
 
-    db.updateAppointment(editingApt.id, {
+    await db.updateAppointment(editingApt.id, {
       patientId: editForm.patientId,
       date: editForm.date,
       time: editForm.time,
@@ -95,15 +162,15 @@ export function Appointments() {
       notes: editForm.notes
     });
 
-    setAppointments(db.getAppointments());
+    await loadData();
     setIsEditModalOpen(false);
     setEditingApt(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this appointment? This cannot be undone.")) {
-      db.deleteAppointment(id);
-      setAppointments(db.getAppointments());
+      await db.deleteAppointment(id);
+      await loadData();
     }
   };
 
@@ -218,7 +285,7 @@ export function Appointments() {
               <select 
                 value={statusFilter} 
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-2 py-1.5 text-[12px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded outline-none text-slate-800 dark:text-slate-150"
+                className="w-full px-2 py-1.5 text-[12px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded outline-none text-slate-800 dark:text-slate-200"
               >
                 <option value="All">All Statuses</option>
                 <option value="Scheduled">Scheduled</option>
@@ -242,7 +309,7 @@ export function Appointments() {
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
               {filteredAppointments.length > 0 ? (
                 filteredAppointments.map((apt) => (
-                  <div key={apt.id} className={`p-3 border rounded relative ${apt.status === 'Completed' ? 'bg-slate-50/50 dark:bg-slate-950/20 border-slate-100 dark:border-slate-850' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
+                  <div key={apt.id} className={`p-3 border rounded relative ${apt.status === 'Completed' ? 'bg-slate-50/50 dark:bg-slate-950/20 border-slate-100 dark:border-slate-700' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
                     <div className="flex justify-between items-start mb-1">
                       <span className="text-[10px] font-semibold text-slate-400">{apt.date} • {apt.time}</span>
                       <Badge variant={apt.status === 'Completed' ? 'success' : apt.status === 'Cancelled' ? 'critical' : 'warning'}>
@@ -295,12 +362,34 @@ export function Appointments() {
         <div className="col-span-12 lg:col-span-8 bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 flex flex-col print-container">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
              <div className="flex items-center gap-3">
-                <h3 className="text-[15px] font-bold text-slate-900 dark:text-white uppercase tracking-wide">Monthly Agenda View</h3>
-             </div>
-             <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 no-print">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Completed</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Scheduled</span>
-             </div>
+                 <h3 className="text-[15px] font-bold text-slate-900 dark:text-white uppercase tracking-wide">
+                   {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                 </h3>
+                 <div className="flex gap-1 no-print">
+                   <button 
+                     onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} 
+                     className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-650 dark:text-slate-300"
+                   >
+                     Prev
+                   </button>
+                   <button 
+                     onClick={() => setCurrentDate(new Date())} 
+                     className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-650 dark:text-slate-300"
+                   >
+                     Today
+                   </button>
+                   <button 
+                     onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} 
+                     className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-650 dark:text-slate-300"
+                   >
+                     Next
+                   </button>
+                 </div>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 no-print">
+                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Completed</span>
+                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Scheduled</span>
+              </div>
           </div>
           <div className="flex-1 grid grid-cols-7 grid-rows-[auto_1fr_1fr_1fr_1fr_1fr] text-[11px]">
              {/* Header */}
@@ -310,45 +399,37 @@ export function Appointments() {
                </div>
              ))}
              {/* Days grid */}
-             {Array.from({length: 35}).map((_, i) => {
-               const dayNum = i - 2;
-               const isCurrentMonth = dayNum > 0 && dayNum <= 31;
-               const isToday = dayNum === new Date().getDate();
-               
-               const dayApts = isCurrentMonth ? enrichedAppointments.filter(a => {
-                 const aptDay = parseInt(a.date.split('-')[2], 10);
-                 return aptDay === dayNum;
-               }) : [];
+             {calendarDays.map((cell, i) => {
+               const isToday = cell.isCurrentMonth && cell.day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear();
+               const dayApts = enrichedAppointments.filter(a => a.date === cell.dateString);
 
                return (
-                 <div key={i} className={cn("p-1 border-b border-r border-slate-100 dark:border-slate-800 min-h-[75px]", !isCurrentMonth && "bg-slate-50/50 dark:bg-slate-950/20")}>
-                    {isCurrentMonth && (
-                      <div className="flex flex-col h-full">
-                        <span className={cn("self-end font-semibold text-[10px] mb-1", isToday ? "bg-sky-500 text-white w-4 h-4 flex items-center justify-center rounded-full" : "text-slate-400")}>
-                          {dayNum}
-                        </span>
-                        <div className="space-y-1">
-                          {dayApts.slice(0, 2).map(apt => (
-                             <div 
-                               key={apt.id} 
-                               className={cn(
-                                 "text-[9px] px-1 py-0.5 rounded truncate font-medium",
-                                 apt.status === 'Completed' 
-                                   ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-l-2 border-emerald-500' 
-                                   : apt.status === 'Cancelled'
-                                   ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 line-through border-l-2 border-red-400'
-                                   : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-l-2 border-amber-500'
-                               )}
-                             >
-                               {apt.time} {apt.patientName.split(' ')[0]}
-                             </div>
-                           ))}
-                           {dayApts.length > 2 && (
-                             <span className="text-[8px] text-slate-400 pl-1 font-semibold">+{dayApts.length - 2} more</span>
-                           )}
-                        </div>
+                 <div key={i} className={cn("p-1 border-b border-r border-slate-100 dark:border-slate-800 min-h-[75px]", !cell.isCurrentMonth && "bg-slate-50/50 dark:bg-slate-950/20")}>
+                    <div className="flex flex-col h-full">
+                      <span className={cn("self-end font-semibold text-[10px] mb-1", isToday ? "bg-sky-500 text-white w-4 h-4 flex items-center justify-center rounded-full" : cell.isCurrentMonth ? "text-slate-700 dark:text-slate-300" : "text-slate-400")}>
+                        {cell.day}
+                      </span>
+                      <div className="space-y-1">
+                        {dayApts.slice(0, 2).map(apt => (
+                           <div 
+                             key={apt.id} 
+                             className={cn(
+                               "text-[9px] px-1 py-0.5 rounded truncate font-medium",
+                               apt.status === 'Completed' 
+                                 ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-l-2 border-emerald-500' 
+                                 : apt.status === 'Cancelled'
+                                 ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 line-through border-l-2 border-red-400'
+                                 : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-l-2 border-amber-500'
+                             )}
+                           >
+                             {apt.time} {apt.patientName.split(' ')[0]}
+                           </div>
+                        ))}
+                        {dayApts.length > 2 && (
+                          <span className="text-[8px] text-slate-400 pl-1 font-semibold">+{dayApts.length - 2} more</span>
+                        )}
                       </div>
-                    )}
+                    </div>
                  </div>
                )
              })}

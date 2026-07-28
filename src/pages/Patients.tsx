@@ -1,14 +1,17 @@
 import { Table, Th, Td } from '@/components/ui/Table';
 import { Link } from 'react-router-dom';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { db, Patient } from '@/services/db';
-import { Edit2, Trash2 } from 'lucide-react';
+import { Edit2, Trash2, Users } from 'lucide-react';
+import { onDbChange } from '@/services/db';
 
 export function Patients() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [patients, setPatients] = useState<Patient[]>(() => db.getPatients());
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [firstName, setFirstName] = useState('');
@@ -35,16 +38,30 @@ export function Patients() {
   const [vaccinationHistory, setVaccinationHistory] = useState('');
   const [medicalNotes, setMedicalNotes] = useState('');
 
+  const loadPatients = async () => {
+    const data = await db.getPatients();
+    setPatients(data);
+  };
+
+  useEffect(() => {
+    loadPatients();
+    const unsub = onDbChange('patients:changed', () => {
+      loadPatients();
+    });
+    return unsub;
+  }, []);
+
   const calculateAge = (dobString: string): number => {
     if (!dobString) return 0;
     const today = new Date();
     const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return 0;
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
-    return age;
+    return Math.max(0, age);
   };
 
   const handleOpenAddModal = () => {
@@ -89,7 +106,7 @@ export function Patients() {
     setEmail(p.email || '');
     setAddress(p.address || '');
     setEmergencyContact(p.emergencyContact || '');
-    setAllergies(p.allergies ? p.allergies.join(', ') : '');
+    setAllergies(Array.isArray(p.allergies) ? p.allergies.join(', ') : (typeof p.allergies === 'string' ? p.allergies : ''));
     setChronicDiseases(p.chronicDiseases || '');
     setCurrentMedications(p.currentMedications || '');
     setPreviousSurgeries(p.previousSurgeries || '');
@@ -103,14 +120,14 @@ export function Patients() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this patient record? This cannot be undone.")) {
-      db.deletePatient(id);
-      setPatients(db.getPatients());
+      await db.deletePatient(id);
+      await loadPatients();
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const allergyList = allergies.split(',').map(s => s.trim()).filter(Boolean);
@@ -146,12 +163,12 @@ export function Patients() {
     };
 
     if (editPatientId) {
-      db.updatePatient(editPatientId, patientData);
+      await db.updatePatient(editPatientId, patientData);
     } else {
-      db.addPatient(patientData);
+      await db.addPatient(patientData);
     }
 
-    setPatients(db.getPatients());
+    await loadPatients();
     setIsModalOpen(false);
   };
 
@@ -165,6 +182,17 @@ export function Patients() {
       (p.phone && p.phone.includes(query))
     );
   }, [patients, searchQuery]);
+
+  const paginatedPatients = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredPatients.slice(start, start + pageSize);
+  }, [filteredPatients, currentPage]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPatients.length / pageSize));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   return (
     <div className="p-5 space-y-4">
@@ -181,130 +209,148 @@ export function Patients() {
         </button>
       </div>
       
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editPatientId ? "Edit Patient Details" : "Add New Patient"}>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">First Name</label>
-              <input value={firstName} onChange={(e) => setFirstName(e.target.value)} type="text" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Last Name</label>
-              <input value={lastName} onChange={(e) => setLastName(e.target.value)} type="text" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Date of Birth</label>
-              <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Gender</label>
-              <select value={gender} onChange={(e) => setGender(e.target.value as any)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none">
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">NIC / Passport</label>
-              <input value={nic} onChange={(e) => setNic(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Blood Group</label>
-              <input value={bloodGroup} onChange={(e) => setBloodGroup(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="e.g. O+" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Marital Status</label>
-              <select value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none">
-                <option value="Single">Single</option>
-                <option value="Married">Married</option>
-                <option value="Divorced">Divorced</option>
-                <option value="Widowed">Widowed</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Occupation</label>
-              <input value={occupation} onChange={(e) => setOccupation(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Phone Number</label>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Email</label>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-            </div>
-          </div>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editPatientId ? "Edit Patient Details" : "Add New Patient"} className="max-w-2xl">
+        <form className="space-y-5" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Address</label>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Emergency Contact</label>
-            <input value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="Name - Phone Number" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Height (cm)</label>
-              <input value={height} onChange={(e) => setHeight(e.target.value)} type="number" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+            <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Personal Information</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">First Name</label>
+                <input value={firstName} onChange={(e) => setFirstName(e.target.value)} type="text" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Last Name</label>
+                <input value={lastName} onChange={(e) => setLastName(e.target.value)} type="text" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
             </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Weight (kg)</label>
-              <input value={weight} onChange={(e) => setWeight(e.target.value)} type="number" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Date of Birth</label>
+                <input value={dob} onChange={(e) => setDob(e.target.value)} type="date" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Gender</label>
+                <select value={gender} onChange={(e) => setGender(e.target.value as 'Male' | 'Female')} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none">
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </div>
             </div>
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Allergies (comma-separated)</label>
-            <input value={allergies} onChange={(e) => setAllergies(e.target.value)} type="text" placeholder="Penicillin, Pollen..." className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Chronic Diseases</label>
-            <input value={chronicDiseases} onChange={(e) => setChronicDiseases(e.target.value)} type="text" placeholder="Asthma, Diabetes..." className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Current Medications</label>
-            <input value={currentMedications} onChange={(e) => setCurrentMedications(e.target.value)} type="text" placeholder="Lisinopril 10mg..." className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Previous Surgeries</label>
-            <input value={previousSurgeries} onChange={(e) => setPreviousSurgeries(e.target.value)} type="text" placeholder="Appendectomy (2010)..." className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Family Medical History</label>
-            <input value={familyMedicalHistory} onChange={(e) => setFamilyMedicalHistory(e.target.value)} type="text" placeholder="Father had heart attack..." className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Smoking Status</label>
-              <select value={smokingStatus} onChange={(e) => setSmokingStatus(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none">
-                <option value="Never">Never</option>
-                <option value="Former smoker">Former Smoker</option>
-                <option value="Current smoker">Current Smoker</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Alcohol Consumption</label>
-              <select value={alcoholConsumption} onChange={(e) => setAlcoholConsumption(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none">
-                <option value="Never">Never</option>
-                <option value="Occasional">Occasional</option>
-                <option value="Socially">Socially</option>
-                <option value="Regularly">Regularly</option>
-              </select>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">NIC / Passport</label>
+                <input value={nic} onChange={(e) => setNic(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Blood Group</label>
+                <input value={bloodGroup} onChange={(e) => setBloodGroup(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="e.g. O+" />
+              </div>
             </div>
           </div>
+
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Vaccination History</label>
-            <input value={vaccinationHistory} onChange={(e) => setVaccinationHistory(e.target.value)} type="text" placeholder="COVID-19 Booster (2023), Tdap (2021)..." className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+            <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Contact & Address</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Phone Number</label>
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Email</label>
+                <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Address</label>
+              <input value={address} onChange={(e) => setAddress(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+            </div>
+            <div className="mt-3">
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Emergency Contact</label>
+              <input value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="Name - Phone Number" />
+            </div>
           </div>
+
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Medical Notes</label>
-            <textarea value={medicalNotes} onChange={(e) => setMedicalNotes(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" placeholder="Additional clinical observations..."></textarea>
+            <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Clinical Measurements</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Height (cm)</label>
+                <input value={height} onChange={(e) => setHeight(e.target.value)} type="number" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Weight (kg)</label>
+                <input value={weight} onChange={(e) => setWeight(e.target.value)} type="number" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Marital Status</label>
+                <select value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none">
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Divorced">Divorced</option>
+                  <option value="Widowed">Widowed</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Occupation</label>
+                <input value={occupation} onChange={(e) => setOccupation(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Smoking Status</label>
+                <select value={smokingStatus} onChange={(e) => setSmokingStatus(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none">
+                  <option value="Never">Never</option>
+                  <option value="Former smoker">Former Smoker</option>
+                  <option value="Current smoker">Current Smoker</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Alcohol Consumption</label>
+                <select value={alcoholConsumption} onChange={(e) => setAlcoholConsumption(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none">
+                  <option value="Never">Never</option>
+                  <option value="Occasional">Occasional</option>
+                  <option value="Socially">Socially</option>
+                  <option value="Regularly">Regularly</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Medical History</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Allergies</label>
+                <textarea value={allergies} onChange={(e) => setAllergies(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none resize-y" placeholder="Penicillin, Pollen..."></textarea>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Chronic Diseases</label>
+                <textarea value={chronicDiseases} onChange={(e) => setChronicDiseases(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none resize-y" placeholder="Asthma, Diabetes..."></textarea>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Current Medications</label>
+                <textarea value={currentMedications} onChange={(e) => setCurrentMedications(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none resize-y" placeholder="Lisinopril 10mg..."></textarea>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Previous Surgeries</label>
+                <textarea value={previousSurgeries} onChange={(e) => setPreviousSurgeries(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none resize-y" placeholder="Appendectomy (2010)..."></textarea>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Family Medical History</label>
+                <textarea value={familyMedicalHistory} onChange={(e) => setFamilyMedicalHistory(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none resize-y" placeholder="Father had heart attack..."></textarea>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Vaccination History</label>
+                <textarea value={vaccinationHistory} onChange={(e) => setVaccinationHistory(e.target.value)} rows={2} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none resize-y" placeholder="COVID-19 Booster (2023), Tdap (2021)..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Clinical Notes</h3>
+            <textarea value={medicalNotes} onChange={(e) => setMedicalNotes(e.target.value)} rows={3} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none resize-y" placeholder="Additional clinical observations..."></textarea>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -339,31 +385,60 @@ export function Patients() {
             </tr>
           </thead>
           <tbody>
-            {filteredPatients.map((patient) => (
-              <tr key={patient.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                <Td className="font-semibold text-slate-700 dark:text-slate-350">#{patient.id}</Td>
-                <Td>{patient.firstName} {patient.lastName}</Td>
-                <Td>{patient.nic || 'N/A'}</Td>
-                <Td>{calculateAge(patient.dob)} / {patient.gender}</Td>
-                <Td>{patient.phone}</Td>
-                <Td>
-                  <div className="flex items-center gap-3">
-                    <Link to={`/patients/${patient.id}`} className="text-sky-500 hover:text-sky-600 font-semibold text-xs">View Profile</Link>
-                    <button onClick={() => handleOpenEditModal(patient)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-250"><Edit2 size={13}/></button>
-                    <button onClick={() => handleDelete(patient.id)} className="text-red-400 hover:text-red-600"><Trash2 size={13}/></button>
-                  </div>
-                </Td>
-              </tr>
-            ))}
-            {filteredPatients.length === 0 && (
+            {paginatedPatients.length > 0 ? (
+              paginatedPatients.map((patient) => (
+                <tr key={patient.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <Td className="font-semibold text-slate-700 dark:text-slate-300">#{patient.id}</Td>
+                  <Td>{patient.firstName} {patient.lastName}</Td>
+                  <Td>{patient.nic || 'N/A'}</Td>
+                  <Td>{calculateAge(patient.dob)} / {patient.gender}</Td>
+                  <Td>{patient.phone}</Td>
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <Link to={`/patients/${patient.id}`} className="text-sky-500 hover:text-sky-600 font-semibold text-xs">View Profile</Link>
+                      <button onClick={() => handleOpenEditModal(patient)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><Edit2 size={13}/></button>
+                      <button onClick={() => handleDelete(patient.id)} className="text-red-400 hover:text-red-600"><Trash2 size={13}/></button>
+                    </div>
+                  </Td>
+                </tr>
+              ))
+            ) : (
               <tr>
-                <Td colSpan={6} className="text-center py-8 text-slate-500 text-[13px]">
-                  No patients found matching your search.
+                <Td colSpan={6} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-2">
+                    <Users size={32} className="text-slate-300 dark:text-slate-600 mb-1" />
+                    <p className="text-[13px] text-slate-500 font-medium">No patient records found</p>
+                    <p className="text-[11px] text-slate-400">Try adjusting your search or add a new patient to get started.</p>
+                  </div>
                 </Td>
               </tr>
             )}
           </tbody>
         </Table>
+        {filteredPatients.length > pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
+            <p className="text-[11px] text-slate-500">
+             Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, filteredPatients.length)} of {filteredPatients.length} records
+            </p>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 text-[11px] font-medium rounded border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span className="text-[11px] text-slate-500 font-medium">Page {currentPage} of {totalPages}</span>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 text-[11px] font-medium rounded border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

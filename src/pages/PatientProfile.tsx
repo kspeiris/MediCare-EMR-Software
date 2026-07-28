@@ -1,16 +1,45 @@
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { HeartPulse, Stethoscope, AlertTriangle, Printer, PlusCircle, Download, FileBadge, Trash2, Calendar, FileText, User, Edit2 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { getLocalDate } from '@/lib/dates';
 import { Modal } from '@/components/ui/Modal';
-import { db, Patient, Consultation, MedicalDocument, MedicalCertificate, Prescription } from '@/services/db';
+import { db, Patient, Consultation, MedicalDocument, MedicalCertificate, Prescription, validateVitals, getDoctorProfileSync } from '@/services/db';
 import { PatientSummaryPrintTemplate } from '@/components/print-templates/PatientSummaryPrintTemplate';
 import { generatePDF } from '@/components/print-templates/pdfExport';
+import { onDbChange } from '@/services/db';
 
 export function PatientProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const patient = db.getPatientById(id || '');
+  const [patient, setPatient] = useState<Patient | null>(() => db.getPatientByIdSync(id || '') || null);
+  const [consultations, setConsultations] = useState<Consultation[]>([]);
+  const [documents, setDocuments] = useState<MedicalDocument[]>([]);
+  const [certificates, setCertificates] = useState<MedicalCertificate[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+
+  const loadData = () => {
+    if (!id) return;
+    db.getPatientById(id).then(p => { if (p) setPatient(p); });
+    db.getConsultationsByPatient(id).then(setConsultations);
+    db.getDocumentsByPatient(id).then(setDocuments);
+    db.getCertificates().then(certs => setCertificates(certs.filter(c => c.patientId === id)));
+    db.getPrescriptionsByPatient(id).then(setPrescriptions);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const unsub1 = onDbChange('patients:changed', loadData);
+    const unsub2 = onDbChange('consultations:changed', loadData);
+    const unsub3 = onDbChange('documents:changed', loadData);
+    const unsub4 = onDbChange('certificates:changed', loadData);
+    const unsub5 = onDbChange('prescriptions:changed', loadData);
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
+  }, [id]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
@@ -34,7 +63,7 @@ export function PatientProfile() {
   const [address, setAddress] = useState(patient?.address || '');
   const [nic, setNic] = useState(patient?.nic || '');
   const [bloodGroup, setBloodGroup] = useState(patient?.bloodGroup || 'O+');
-  const [allergies, setAllergies] = useState(patient?.allergies ? patient?.allergies.join(', ') : '');
+  const [allergies, setAllergies] = useState(Array.isArray(patient?.allergies) ? patient!.allergies.join(', ') : (typeof patient?.allergies === 'string' ? patient.allergies : ''));
   const [chronicDiseases, setChronicDiseases] = useState(patient?.chronicDiseases || '');
   const [currentMedications, setCurrentMedications] = useState(patient?.currentMedications || '');
   const [previousSurgeries, setPreviousSurgeries] = useState(patient?.previousSurgeries || '');
@@ -44,6 +73,27 @@ export function PatientProfile() {
   const [height, setHeight] = useState(String(patient?.height || 175));
   const [weight, setWeight] = useState(String(patient?.weight || 70));
 
+  useEffect(() => {
+    if (patient) {
+      setFirstName(patient.firstName || '');
+      setLastName(patient.lastName || '');
+      setPhone(patient.phone || '');
+      setEmail(patient.email || '');
+      setAddress(patient.address || '');
+      setNic(patient.nic || '');
+      setBloodGroup(patient.bloodGroup || 'O+');
+      setAllergies(Array.isArray(patient.allergies) ? patient.allergies.join(', ') : (typeof patient.allergies === 'string' ? patient.allergies : ''));
+      setChronicDiseases(patient.chronicDiseases || '');
+      setCurrentMedications(patient.currentMedications || '');
+      setPreviousSurgeries(patient.previousSurgeries || '');
+      setFamilyMedicalHistory(patient.familyMedicalHistory || '');
+      setSmokingStatus(patient.smokingStatus || 'Never');
+      setAlcoholConsumption(patient.alcoholConsumption || 'Never');
+      setHeight(String(patient.height || 175));
+      setWeight(String(patient.weight || 70));
+    }
+  }, [patient]);
+
   // Vitals for new consultation modal
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
@@ -52,17 +102,19 @@ export function PatientProfile() {
   const [pulse, setPulse] = useState('72');
   const [temp, setTemp] = useState('98.6');
   const [o2, setO2] = useState('98');
+  const [vitalsError, setVitalsError] = useState('');
 
   const calculateAge = (dobString: string): number => {
     if (!dobString) return 0;
     const today = new Date();
     const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return 0;
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
-    return age;
+    return Math.max(0, age);
   };
 
   const bmi = useMemo(() => {
@@ -81,13 +133,7 @@ export function PatientProfile() {
     );
   }
 
-  // Get dynamic data
-  const consultations = db.getConsultationsByPatient(patient.id);
-  const documents = db.getDocumentsByPatient(patient.id);
-  const certificates = db.getCertificates().filter(c => c.patientId === patient.id);
-  const prescriptions = db.getPrescriptionsByPatient(patient.id);
-
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const allergyList = allergies.split(',').map(s => s.trim()).filter(Boolean);
     
@@ -111,7 +157,7 @@ export function PatientProfile() {
       bmi: bmi || undefined
     };
 
-    db.updatePatient(patient.id, updated);
+    await db.updatePatient(patient.id, updated);
     setIsEditModalOpen(false);
   };
 
@@ -126,11 +172,11 @@ export function PatientProfile() {
     }
   };
 
-  const handleUploadDoc = (e: React.FormEvent) => {
+  const handleUploadDoc = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!docName || !docFileBase64) return;
     
-    db.addDocument({
+    await db.addDocument({
       patientId: patient.id,
       name: docName,
       type: docType,
@@ -142,12 +188,19 @@ export function PatientProfile() {
     setIsUploadDocOpen(false);
   };
 
-  const handleAddConsultationSubmit = (e: React.FormEvent) => {
+  const handleAddConsultationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const newCons = db.addConsultation({
+
+    const vitalsErr = validateVitals(bp, pulse, temp, o2);
+    if (vitalsErr) {
+      setVitalsError(vitalsErr);
+      return;
+    }
+    setVitalsError('');
+
+    const newCons = await db.addConsultation({
       patientId: patient.id,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       chiefComplaint,
       historyOfPresentIllness: '',
@@ -160,21 +213,20 @@ export function PatientProfile() {
         weight: patient.weight,
         bmi: patient.bmi || 0,
         bloodPressure: bp,
-        pulseRate: parseInt(pulse) || 72,
-        respiratoryRate: 16,
-        temperature: parseFloat(temp) || 98.6,
-        oxygenSaturation: parseInt(o2) || 98,
-        bloodSugar: 90
+        pulseRate: parseInt(pulse) || 0,
+        respiratoryRate: parseInt(String(16)) || 0,
+        temperature: parseFloat(temp) || 0,
+        oxygenSaturation: parseInt(o2) || 0,
+        bloodSugar: parseInt(String(90)) || 0
       }
     });
 
-    // Automatically navigate to prescribe medicine for this consultation
     navigate('/prescriptions', { state: { consultationId: newCons.id, patientId: patient.id } });
   };
 
-  const handleDeleteDoc = (docId: string) => {
+  const handleDeleteDoc = async (docId: string) => {
     if (window.confirm("Delete this document?")) {
-      db.deleteDocument(docId);
+      await db.deleteDocument(docId);
     }
   };
 
@@ -185,11 +237,11 @@ export function PatientProfile() {
     setIsEditDocOpen(true);
   };
 
-  const handleEditDocSubmit = (e: React.FormEvent) => {
+  const handleEditDocSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDoc) return;
 
-    db.updateDocument(editingDoc.id, {
+    await db.updateDocument(editingDoc.id, {
       name: editDocName,
       type: editDocType
     });
@@ -205,9 +257,6 @@ export function PatientProfile() {
   const handleExportPDF = async () => {
     setIsGeneratingPDF(true);
     try {
-      const consultations = db.getConsultationsByPatient(patient.id);
-      const prescriptions = db.getPrescriptionsByPatient(patient.id);
-      const certificates = db.getCertificates().filter(c => c.patientId === patient.id);
       const filename = `PatientSummary_${patient.firstName}_${patient.lastName}_${patient.id}`;
       await generatePDF('printable-patient-summary', filename);
     } catch (error) {
@@ -238,7 +287,7 @@ export function PatientProfile() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-[20px] font-bold text-slate-900 dark:text-white leading-none">{patient.firstName} {patient.lastName}</h1>
-              <span className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-350 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase">ID: {patient.id}</span>
+              <span className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase">ID: {patient.id}</span>
             </div>
             <div className="flex items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
               <span>{calculateAge(patient.dob)} yrs ({patient.gender})</span>
@@ -300,12 +349,12 @@ export function PatientProfile() {
 
               <div>
                 <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Chronic Conditions</div>
-                <p className="text-slate-700 dark:text-slate-350 text-xs font-medium leading-relaxed">{patient.chronicDiseases || 'None recorded'}</p>
+                <p className="text-slate-700 dark:text-slate-300 text-xs font-medium leading-relaxed">{patient.chronicDiseases || 'None recorded'}</p>
               </div>
 
               <div>
                 <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Habits</div>
-                <div className="text-xs text-slate-700 dark:text-slate-350 flex gap-4 font-semibold">
+                <div className="text-xs text-slate-700 dark:text-slate-300 flex gap-4 font-semibold">
                   <span>Smoking: <span className="font-normal">{patient.smokingStatus}</span></span>
                   <span>Alcohol: <span className="font-normal">{patient.alcoholConsumption}</span></span>
                 </div>
@@ -421,7 +470,7 @@ export function PatientProfile() {
                 certificates.map((cert) => (
                   <div key={cert.id} className="p-3 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded flex justify-between items-center">
                     <div>
-                      <div className="text-xs font-semibold text-slate-850 dark:text-slate-150">Rest: {cert.restPeriod}</div>
+                      <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">Rest: {cert.restPeriod}</div>
                       <div className="text-[11px] text-slate-500">Diagnosis: {cert.diagnosis} • Issued {cert.issueDate}</div>
                     </div>
                     <Badge variant="warning">{cert.id}</Badge>
@@ -492,7 +541,7 @@ export function PatientProfile() {
           </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
             <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-600 dark:text-slate-400">Cancel</button>
-            <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-655 font-semibold">Save Changes</button>
+            <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Save Changes</button>
           </div>
         </form>
       </Modal>
@@ -561,7 +610,7 @@ export function PatientProfile() {
             <input type="file" onChange={handleFileChange} required className="w-full text-xs text-slate-500 dark:text-slate-400 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-sky-50 dark:file:bg-sky-950 file:text-sky-700 dark:file:text-sky-400 hover:file:bg-sky-100" />
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <button type="button" onClick={() => setIsUploadDocOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-650 dark:text-slate-400">Cancel</button>
+            <button type="button" onClick={() => setIsUploadDocOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">Cancel</button>
             <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Upload File</button>
           </div>
         </form>
@@ -584,46 +633,22 @@ export function PatientProfile() {
               <option value="Other Documents">Other Documents</option>
             </select>
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <button type="button" onClick={() => setIsUploadDocOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-650 dark:text-slate-400">Cancel</button>
-            <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Upload File</button>
-          </div>
-        </form>
-      </Modal>
+           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+             <button type="button" onClick={() => setIsEditDocOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">Cancel</button>
+             <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Save Changes</button>
+           </div>
+         </form>
+       </Modal>
 
-      <Modal isOpen={isEditDocOpen} onClose={() => setIsEditDocOpen(false)} title="Edit Document">
-        <form onSubmit={handleEditDocSubmit} className="space-y-4">
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Document Title / Name</label>
-            <input value={editDocName} onChange={(e) => setEditDocName(e.target.value)} type="text" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[13px] outline-none text-slate-900 dark:text-slate-100" placeholder="e.g. Blood Report Oct 2025" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Document Category</label>
-            <select value={editDocType} onChange={(e) => setEditDocType(e.target.value)} className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[13px] outline-none text-slate-900 dark:text-slate-100">
-              <option value="Laboratory Reports">Laboratory Reports</option>
-              <option value="X-ray Reports">X-ray Reports</option>
-              <option value="MRI Reports">MRI/CT Scan Reports</option>
-              <option value="ECG Reports">ECG Reports</option>
-              <option value="Ultrasound Reports">Ultrasound Reports</option>
-              <option value="Other Documents">Other Documents</option>
-            </select>
-          </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <button type="button" onClick={() => setIsEditDocOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-600 dark:text-slate-400">Cancel</button>
-            <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Save Changes</button>
-          </div>
-        </form>
-      </Modal>
-
-      <div id="printable-patient-summary" className="hidden">
-        <PatientSummaryPrintTemplate
-          patient={patient}
-          consultations={db.getConsultationsByPatient(patient.id)}
-          prescriptions={db.getPrescriptionsByPatient(patient.id)}
-          certificates={db.getCertificates().filter(c => c.patientId === patient.id)}
-          doctor={db.getDoctorProfile()}
-        />
-      </div>
+        <div id="printable-patient-summary" className="hidden">
+         <PatientSummaryPrintTemplate
+           patient={patient}
+           consultations={consultations}
+           prescriptions={prescriptions}
+           certificates={certificates.filter(c => c.patientId === patient.id)}
+           doctor={getDoctorProfileSync()}
+         />
+       </div>
     </div>
   );
 }

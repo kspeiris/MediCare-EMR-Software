@@ -1,12 +1,14 @@
 import { Table, Th, Td } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { getLocalDate } from '@/lib/dates';
 import { Modal } from '@/components/ui/Modal';
 import { Search, PlusCircle, Edit2, Trash2, Download, Printer } from 'lucide-react';
 import { db, Consultation } from '@/services/db';
 import { Link } from 'react-router-dom';
 import { ConsultationPrintTemplate } from '@/components/print-templates/ConsultationPrintTemplate';
 import { generatePDF } from '@/components/print-templates/pdfExport';
+import { onDbChange } from '@/services/db';
 
 export function Consultations() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -15,10 +17,40 @@ export function Consultations() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingVisit, setEditingVisit] = useState<Consultation | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [vitalsError, setVitalsError] = useState('');
+  const [consultations, setConsultations] = useState<Consultation[]>(() => db.getConsultationsSync());
+  const [patients, setPatients] = useState(() => db.getPatientsSync());
+  const [doc, setDoc] = useState(() => db.getDoctorProfileSync());
 
-  const consultations = db.getConsultations();
-  const patients = db.getPatients();
-  const doc = db.getDoctorProfile();
+  const loadData = () => {
+    db.getConsultations().then(setConsultations);
+    db.getPatients().then(setPatients);
+    setDoc(db.getDoctorProfile());
+  };
+
+  useEffect(() => {
+    loadData();
+    const unsub1 = onDbChange('consultations:changed', loadData);
+    const unsub2 = onDbChange('patients:changed', loadData);
+    const unsub3 = onDbChange('doctor:changed', loadData);
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, []);
+
+  const validateVitals = (bp: string, pulse: string, temp: string, o2: string): string => {
+    if (pulse && (isNaN(Number(pulse)) || Number(pulse) < 30 || Number(pulse) > 220)) {
+      return 'Pulse must be between 30 and 220 bpm.';
+    }
+    if (temp && (isNaN(Number(temp)) || Number(temp) < 90 || Number(temp) > 110)) {
+      return 'Temperature must be between 90 and 110 °F.';
+    }
+    if (o2 && (isNaN(Number(o2)) || Number(o2) < 70 || Number(o2) > 100)) {
+      return 'Oxygen saturation must be between 70 and 100 %.';
+    }
+    if (bp && !/^\d{2,3}\/\d{2,3}$/.test(bp.trim())) {
+      return 'Blood pressure must be in format systolic/diastolic (e.g. 120/80).';
+    }
+    return '';
+  };
 
   const [createForm, setCreateForm] = useState({
     patientId: '',
@@ -70,15 +102,22 @@ export function Consultations() {
     );
   }, [enrichedConsultations, searchQuery]);
 
-  const handleCreateConsultation = (e: React.FormEvent) => {
+  const handleCreateConsultation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.patientId || !createForm.chiefComplaint || !createForm.diagnosis) return;
 
+    const vitalsErr = validateVitals(createForm.bp, createForm.pulse, createForm.temp, createForm.o2);
+    if (vitalsErr) {
+      setVitalsError(vitalsErr);
+      return;
+    }
+    setVitalsError('');
+    
     const patient = patients.find(p => p.id === createForm.patientId);
     
-    db.addConsultation({
+    await db.addConsultation({
       patientId: createForm.patientId,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       chiefComplaint: createForm.chiefComplaint,
       historyOfPresentIllness: createForm.historyOfPresentIllness,
@@ -99,6 +138,8 @@ export function Consultations() {
       }
     });
 
+    setConsultations(db.getConsultationsSync());
+    
     setCreateForm({
       patientId: '',
       chiefComplaint: '',
@@ -133,13 +174,20 @@ export function Consultations() {
     setIsEditModalOpen(true);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingVisit || !editForm.chiefComplaint || !editForm.diagnosis) return;
 
+    const vitalsErr = validateVitals(editForm.bp, editForm.pulse, editForm.temp, editForm.o2);
+    if (vitalsErr) {
+      setVitalsError(vitalsErr);
+      return;
+    }
+    setVitalsError('');
+
     const patient = patients.find(p => p.id === editForm.patientId);
 
-    db.updateConsultation(editingVisit.id, {
+    await db.updateConsultation(editingVisit.id, {
       patientId: editForm.patientId,
       chiefComplaint: editForm.chiefComplaint,
       historyOfPresentIllness: editForm.historyOfPresentIllness,
@@ -160,14 +208,16 @@ export function Consultations() {
       }
     });
 
+    setConsultations(db.getConsultationsSync());
     setIsEditModalOpen(false);
     setEditingVisit(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this consultation record? This cannot be undone.")) {
-      db.deleteConsultation(id);
+      await db.deleteConsultation(id);
       setSelectedVisit(null);
+      setConsultations(db.getConsultationsSync());
     }
   };
 
@@ -303,6 +353,11 @@ export function Consultations() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {vitalsError && (
+              <div className="text-red-600 text-[11px] font-semibold self-center mr-2">
+                {vitalsError}
+              </div>
+            )}
             <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-600 dark:text-slate-400">Cancel</button>
             <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Save Consultation</button>
           </div>
@@ -445,6 +500,11 @@ export function Consultations() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {vitalsError && (
+              <div className="text-red-600 text-[11px] font-semibold self-center mr-2">
+                {vitalsError}
+              </div>
+            )}
             <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-[12px] font-medium text-slate-600 dark:text-slate-400">Cancel</button>
             <button type="submit" className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] hover:bg-sky-600 font-semibold">Update Consultation</button>
           </div>
@@ -479,7 +539,7 @@ export function Consultations() {
           <tbody>
             {filteredVisits.map((visit) => (
               <tr key={visit.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                <Td className="font-semibold text-slate-700 dark:text-slate-350">{visit.patientName}</Td>
+                 <Td className="font-semibold text-slate-700 dark:text-slate-300">{visit.patientName}</Td>
                 <Td className="text-slate-500">#{visit.id}</Td>
                 <Td>{visit.date} {visit.time}</Td>
                 <Td>{visit.diagnosis}</Td>
