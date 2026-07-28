@@ -31,7 +31,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
         onClick={onClose}
       />
       <div className={cn("relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]", className)}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-950/50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-950/50">
           <h3 className="text-[14px] font-semibold text-slate-900 dark:text-white">{title}</h3>
           <button 
             onClick={onClose}

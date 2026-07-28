@@ -13,5 +13,5 @@ export function Th({ children, className }: { children: React.ReactNode, classNa
 }
 
 export function Td({ children, className, colSpan }: { children: React.ReactNode, className?: string, colSpan?: number }) {
-  return <td colSpan={colSpan} className={cn("px-4 py-2.5 border-b border-slate-100 dark:border-slate-850", className)}>{children}</td>;
+  return <td colSpan={colSpan} className={cn("px-4 py-2.5 border-b border-slate-100 dark:border-slate-700", className)}>{children}</td>;
 }

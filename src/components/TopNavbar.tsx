@@ -1,38 +1,44 @@
-import { Search, Bell, Calendar, Moon, Sun, X, Clock, Users, Stethoscope, CheckCircle2, User } from 'lucide-react';
+import { Search, Bell, Calendar, Moon, Sun, X, Clock, Users, Stethoscope, CheckCircle2, User, Menu } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { db, Patient, Appointment } from '@/services/db';
 import { Link, useNavigate } from 'react-router-dom';
+import { getLocalDate } from '@/lib/dates';
+import { onDbChange } from '@/services/db';
 
 interface TopNavbarProps {
   darkMode: boolean;
   setDarkMode: (val: boolean) => void;
   onLogout: () => void;
+  onToggleSidebar: () => void;
 }
 
-export function TopNavbar({ darkMode, setDarkMode, onLogout }: TopNavbarProps) {
+export function TopNavbar({ darkMode, setDarkMode, onLogout, onToggleSidebar }: TopNavbarProps) {
   const navigate = useNavigate();
   const [showSearch, setShowSearch] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [doc, setDoc] = useState<{ name: string; regNumber: string; specialization: string; clinicName: string; clinicAddress: string; phone: string; email: string; role?: string }>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'admin' });
   const searchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const doc = db.getDoctorProfile();
-  const patients = db.getPatients();
-  const appointments = db.getAppointments();
+  const loadData = async () => {
+    const [p, a, d] = await Promise.all([
+      db.getPatients(),
+      db.getAppointments(),
+      db.getDoctorProfile()
+    ]);
+    setPatients(p);
+    setAppointments(a);
+    setDoc(d);
+  };
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowSearch(false);
-      }
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    loadData();
+    const unsub1 = onDbChange('patients:changed', loadData);
+    const unsub2 = onDbChange('appointments:changed', loadData);
+    return () => { unsub1(); unsub2(); };
   }, []);
 
   // Filter patients based on query
@@ -49,7 +55,7 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout }: TopNavbarProps) {
   }, [patients, searchQuery]);
 
   // Today's appointments for notifications
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDate();
   const todaysAppointments = useMemo(() => {
     return appointments.filter((a: Appointment) => a.date === today && a.status === 'Scheduled');
   }, [appointments, today]);
@@ -62,7 +68,11 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout }: TopNavbarProps) {
 
   return (
     <header className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center px-6 h-14 w-full no-print">
-      <div className="flex-1 max-w-md relative" ref={searchRef}>
+      <div className="flex items-center gap-3">
+        <button onClick={onToggleSidebar} className="md:hidden hover:text-slate-800 dark:hover:text-slate-100 p-1 -ml-2">
+          <Menu size={20} />
+        </button>
+        <div className="flex-1 max-w-md relative" ref={searchRef}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input 
@@ -80,7 +90,7 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout }: TopNavbarProps) {
         
         {/* Search Center Dropdown */}
         {showSearch && (
-          <div className="absolute top-full left-0 w-[500px] mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg overflow-hidden z-50">
+          <div className="absolute top-full left-0 min-w-[320px] max-w-[500px] mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg overflow-hidden z-50">
             <div className="flex justify-between items-center px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">EMR Global Search</span>
               <button onClick={() => setShowSearch(false)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
@@ -123,6 +133,7 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout }: TopNavbarProps) {
             </div>
           </div>
         )}
+        </div>
       </div>
       
       <div className="flex items-center gap-4">
@@ -132,7 +143,9 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout }: TopNavbarProps) {
             <button onClick={() => setShowNotifications(!showNotifications)} className="hover:text-slate-800 dark:hover:text-slate-100 relative p-1">
               <Bell size={16} />
               {todaysAppointments.length > 0 && (
-                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-amber-500 rounded-full"></span>
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center leading-none">
+                  {todaysAppointments.length}
+                </span>
               )}
             </button>
             
@@ -142,7 +155,7 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout }: TopNavbarProps) {
                 <div className="flex justify-between items-center px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
                   <span className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">Today's Reminders</span>
                   <span className="text-[11px] bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full font-medium">
-                    {todaysAppointments.length} pending
+                    {todaysAppointments.length} Scheduled
                   </span>
                 </div>
                 <div className="max-h-[350px] overflow-y-auto">
@@ -194,7 +207,12 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout }: TopNavbarProps) {
         
         <div className="flex items-center gap-3 border-l border-slate-200 dark:border-slate-800 pl-4">
           <div className="text-right">
-            <p className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{doc.name}</p>
+            <div className="flex items-center gap-1.5 justify-end">
+              <span className="text-[9px] bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                {doc.role || 'admin'}
+              </span>
+              <p className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{doc.name}</p>
+            </div>
             <p className="text-[9px] text-slate-400 uppercase font-semibold">{doc.specialization}</p>
           </div>
           <div className="w-8 h-8 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold text-[12px] cursor-pointer hover:bg-sky-200 dark:hover:bg-sky-900 transition-colors">
