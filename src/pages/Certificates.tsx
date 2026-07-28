@@ -1,26 +1,42 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { getLocalDate } from '@/lib/dates';
 import { Table, Th, Td } from '@/components/ui/Table';
 import { Modal } from '@/components/ui/Modal';
 import { Search, PlusCircle, Printer, Edit2, Trash2, Download } from 'lucide-react';
 import { db, MedicalCertificate, Patient } from '@/services/db';
+import { Link } from 'react-router-dom';
 import { CertificatePrintTemplate } from '@/components/print-templates/CertificatePrintTemplate';
 import { generatePDF } from '@/components/print-templates/pdfExport';
+import { onDbChange } from '@/services/db';
 
 export function Certificates() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingCert, setEditingCert] = useState<MedicalCertificate | null>(null);
-  const [certificates, setCertificates] = useState<MedicalCertificate[]>(() => db.getCertificates());
+  const [certificates, setCertificates] = useState<MedicalCertificate[]>(() => db.getCertificatesSync());
+  const [patients, setPatients] = useState<Patient[]>(() => db.getPatientsSync());
+  const [doc, setDoc] = useState(() => db.getDoctorProfileSync());
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  
-  const patients = db.getPatients();
-  const doc = db.getDoctorProfile();
+
+  const loadData = () => {
+    db.getCertificates().then(setCertificates);
+    db.getPatients().then(setPatients);
+    setDoc(db.getDoctorProfile());
+  };
+
+  useEffect(() => {
+    loadData();
+    const unsub1 = onDbChange('certificates:changed', loadData);
+    const unsub2 = onDbChange('patients:changed', loadData);
+    const unsub3 = onDbChange('doctor:changed', loadData);
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, []);
 
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [restPeriod, setRestPeriod] = useState('3 Days');
-  const [issueDate, setIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [issueDate, setIssueDate] = useState(() => getLocalDate());
   const [doctorRemarks, setDoctorRemarks] = useState('');
 
   const [editForm, setEditForm] = useState({
@@ -52,11 +68,11 @@ export function Certificates() {
     );
   }, [enrichedCertificates, searchQuery]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatientId || !diagnosis) return;
 
-    const newCert = db.addCertificate({
+    const newCert = await db.addCertificate({
       patientId: selectedPatientId,
       diagnosis,
       restPeriod,
@@ -64,7 +80,7 @@ export function Certificates() {
       doctorRemarks
     });
 
-    setCertificates(db.getCertificates());
+    setCertificates(db.getCertificatesSync());
     
     setSelectedPatientId('');
     setDiagnosis('');
@@ -87,11 +103,11 @@ export function Certificates() {
     setIsEditModalOpen(true);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCert || !editForm.diagnosis) return;
 
-    db.updateCertificate(editingCert.id, {
+    await db.updateCertificate(editingCert.id, {
       patientId: editForm.patientId,
       diagnosis: editForm.diagnosis,
       restPeriod: editForm.restPeriod,
@@ -99,15 +115,15 @@ export function Certificates() {
       doctorRemarks: editForm.doctorRemarks
     });
 
-    setCertificates(db.getCertificates());
+    setCertificates(db.getCertificatesSync());
     setIsEditModalOpen(false);
     setEditingCert(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this medical certificate? This cannot be undone.")) {
-      db.deleteCertificate(id);
-      setCertificates(db.getCertificates());
+      await db.deleteCertificate(id);
+      setCertificates(db.getCertificatesSync());
     }
   };
 

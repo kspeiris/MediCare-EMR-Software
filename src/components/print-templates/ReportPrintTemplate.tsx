@@ -35,8 +35,8 @@ export function ReportPrintTemplate({ type, doctor, data }: ReportPrintTemplateP
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">{doctor.clinicName}</h1>
-                <p className="text-xs text-slate-650">{doctor.clinicAddress}</p>
-                <p className="text-xs text-slate-650">Phone: {doctor.phone} | Email: {doctor.email}</p>
+                <p className="text-xs text-slate-500">{doctor.clinicAddress}</p>
+                <p className="text-xs text-slate-500">Phone: {doctor.phone} | Email: {doctor.email}</p>
               </div>
             </div>
           </div>
@@ -189,9 +189,9 @@ export function ReportPrintTemplate({ type, doctor, data }: ReportPrintTemplateP
                   <td className="border-r border-slate-200 p-2 whitespace-nowrap">{c.date} <span className="text-[10px] text-slate-400 block">{c.time}</span></td>
                   <td className="border-r border-slate-200 p-2 font-medium text-sky-800">{c.diagnosis}</td>
                   <td className="p-2 text-slate-700">
-                    <div><span className="font-semibold text-slate-850">Complaint:</span> {c.chiefComplaint}</div>
+                    <div><span className="font-semibold text-slate-700">Complaint:</span> {c.chiefComplaint}</div>
                     {c.treatmentPlan && (
-                      <div className="mt-1"><span className="font-semibold text-slate-850">Advice:</span> {c.treatmentPlan}</div>
+                      <div className="mt-1"><span className="font-semibold text-slate-700">Advice:</span> {c.treatmentPlan}</div>
                     )}
                   </td>
                 </tr>
@@ -210,7 +210,7 @@ export function ReportPrintTemplate({ type, doctor, data }: ReportPrintTemplateP
           </div>
           <div className="text-center w-48 border-t border-slate-300 pt-2">
             <p className="font-bold text-slate-800">{doctor.name}</p>
-            <p className="text-[10px] text-slate-650">Clinic Director / RMO</p>
+            <p className="text-[10px] text-slate-500">Clinic Director / RMO</p>
           </div>
         </div>
       </div>

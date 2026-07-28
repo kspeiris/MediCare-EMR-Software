@@ -15,12 +15,7 @@ export const generatePDF = async (elementId: string, filename: string): Promise<
 
     clone.style.setProperty('display', 'block', 'important');
     clone.classList.remove('hidden');
-
-    if (element.clientWidth) {
-      clone.style.width = `${element.clientWidth}px`;
-    } else {
-      clone.style.width = '800px';
-    }
+    clone.style.width = '800px';
 
     document.body.appendChild(clone);
 
@@ -30,33 +25,13 @@ export const generatePDF = async (elementId: string, filename: string): Promise<
       logging: false,
       backgroundColor: '#ffffff',
       onclone: (clonedDoc) => {
+        const target = clonedDoc.getElementById(elementId);
+        if (target) {
+          target.style.display = 'block';
+          target.classList.remove('hidden');
+        }
         const style = clonedDoc.createElement('style');
         style.textContent = `
-          #${elementId}, #${elementId} * {
-            color: #0f172a !important;
-            background-color: transparent;
-            border-color: #cbd5e1 !important;
-            box-shadow: none !important;
-            text-shadow: none !important;
-          }
-
-          #${elementId} {
-            background: #ffffff !important;
-          }
-
-          #${elementId} .bg-sky-600,
-          #${elementId} .bg-sky-500,
-          #${elementId} .bg-sky-50,
-          #${elementId} .bg-slate-50,
-          #${elementId} .bg-slate-100,
-          #${elementId} .bg-white,
-          #${elementId} .bg-red-100,
-          #${elementId} .bg-red-50,
-          #${elementId} .bg-emerald-50,
-          #${elementId} .bg-amber-50 {
-            background-color: #ffffff !important;
-          }
-
           #${elementId} img {
             max-width: 100%;
           }

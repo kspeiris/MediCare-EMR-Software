@@ -1,12 +1,14 @@
 import { Table, Th, Td } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { useState, useMemo, useEffect } from 'react';
+import { getLocalDate } from '@/lib/dates';
 import { Modal } from '@/components/ui/Modal';
 import { Search, Printer, AlertTriangle, Plus, Trash2, Edit2, Download } from 'lucide-react';
-import { db, Prescription, Patient, Consultation, MedicineItem } from '@/services/db';
+import { db, Prescription, Patient, Consultation, MedicineItem, DoctorProfile } from '@/services/db';
 import { useLocation } from 'react-router-dom';
 import { PrescriptionPrintTemplate } from '@/components/print-templates/PrescriptionPrintTemplate';
 import { generatePDF } from '@/components/print-templates/pdfExport';
+import { onDbChange } from '@/services/db';
 
 export function Prescriptions() {
   const location = useLocation();
@@ -15,11 +17,27 @@ export function Prescriptions() {
   const [editingPrescription, setEditingPrescription] = useState<Prescription | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => db.getPrescriptions());
-  const patients = db.getPatients();
-  const consultations = db.getConsultations();
-  const doc = db.getDoctorProfile();
+
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>(() => db.getPrescriptionsSync());
+  const [patients, setPatients] = useState<Patient[]>(() => db.getPatientsSync());
+  const [consultations, setConsultations] = useState<Consultation[]>(() => db.getConsultationsSync());
+  const [doc, setDoc] = useState<DoctorProfile>(() => db.getDoctorProfileSync());
+
+  const loadData = () => {
+    db.getPrescriptions().then(setPrescriptions);
+    db.getPatients().then(setPatients);
+    db.getConsultations().then(setConsultations);
+    setDoc(db.getDoctorProfile());
+  };
+
+  useEffect(() => {
+    loadData();
+    const unsub1 = onDbChange('prescriptions:changed', loadData);
+    const unsub2 = onDbChange('patients:changed', loadData);
+    const unsub3 = onDbChange('consultations:changed', loadData);
+    const unsub4 = onDbChange('doctor:changed', loadData);
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
+  }, []);
 
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [selectedConsultationId, setSelectedConsultationId] = useState('');
@@ -29,7 +47,6 @@ export function Prescriptions() {
   const [allergyWarning, setAllergyWarning] = useState('');
 
   const [editMedicines, setEditMedicines] = useState<MedicineItem[]>([]);
-
   const [printPresc, setPrintPresc] = useState<Prescription | null>(null);
 
   useEffect(() => {
@@ -47,17 +64,32 @@ export function Prescriptions() {
       return;
     }
     const patientObj = patients.find(p => p.id === selectedPatientId);
-    if (patientObj && patientObj.allergies) {
+    if (patientObj && Array.isArray(patientObj.allergies) && patientObj.allergies.length > 0) {
       const matched = medicines.find(m => {
         if (!m.name) return false;
-        return patientObj.allergies.some(a => m.name.toLowerCase().includes(a.toLowerCase()));
+        const medName = m.name.toLowerCase();
+        return patientObj.allergies!.some(a => {
+          const allergy = a.toLowerCase().trim();
+          if (!allergy) return false;
+          const medWords = medName.split(/[\s\-/]+/);
+          return medWords.some(w => w === allergy || w.startsWith(allergy) || allergy.startsWith(w)) ||
+            medName.includes(allergy) || allergy.includes(medName);
+        });
       });
       if (matched) {
-        const matchedAllergy = patientObj.allergies.find(a => matched!.name.toLowerCase().includes(a.toLowerCase()));
-        setAllergyWarning(`WARNING: Patient has a documented allergy to "${matchedAllergy}" (${matched.name})!`);
+        const matchedAllergy = patientObj.allergies.find(a => {
+          const allergy = a.toLowerCase().trim();
+          const medName = matched!.name.toLowerCase();
+          const medWords = medName.split(/[\s\-/]+/);
+          return medWords.some(w => w === allergy || w.startsWith(allergy) || allergy.startsWith(w)) ||
+            medName.includes(allergy) || allergy.includes(medName);
+        });
+        setAllergyWarning(`WARNING: Patient has a documented allergy to "${matchedAllergy}". Prescribed medicine "${matched.name}" may cross-react.`);
       } else {
         setAllergyWarning('');
       }
+    } else {
+      setAllergyWarning('');
     }
   }, [selectedPatientId, medicines, patients]);
 
@@ -92,10 +124,11 @@ export function Prescriptions() {
   const filteredPrescriptions = useMemo(() => {
     const list = prescriptions.map(p => {
       const patObj = patients.find(pat => pat.id === p.patientId);
+      const medsArray = Array.isArray(p.medicines) ? p.medicines : [];
       return {
         ...p,
         patientName: patObj ? `${patObj.firstName} ${patObj.lastName}` : 'Unknown Patient',
-        medSummary: p.medicines.map(m => `${m.name} ${m.strength}`).join(', ')
+        medSummary: medsArray.map(m => `${m.name} ${m.strength}`).join(', ')
       };
     });
 
@@ -108,17 +141,17 @@ export function Prescriptions() {
     );
   }, [prescriptions, patients, searchQuery]);
 
-  const handleCreatePrescription = (e: React.FormEvent) => {
+  const handleCreatePrescription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPatientId || medicines.length === 0 || !medicines[0].name) return;
 
     const validMedicines = medicines.filter(m => m.name.trim() !== '');
     if (validMedicines.length === 0) return;
 
-    const newPresc = db.addPrescription({
+    const newPresc = await db.addPrescription({
       consultationId: selectedConsultationId || 'CNS-NONE',
       patientId: selectedPatientId,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDate(),
       medicines: validMedicines.map(m => ({
         name: m.name,
         strength: m.strength,
@@ -131,7 +164,7 @@ export function Prescriptions() {
       }))
     });
 
-    setPrescriptions(db.getPrescriptions());
+    loadData();
     
     setMedicines([{ name: '', strength: '', dosage: '1 tablet', frequency: 'Once a day', duration: '7 days', route: 'Oral', quantity: 10, instructions: 'Take after meals' }]);
     setAllergyWarning('');
@@ -142,19 +175,20 @@ export function Prescriptions() {
 
   const handleEditClick = (prescription: Prescription) => {
     setEditingPrescription(prescription);
-    setEditMedicines(prescription.medicines.length > 0 ? [...prescription.medicines] : [{ name: '', strength: '', dosage: '1 tablet', frequency: 'Once a day', duration: '7 days', route: 'Oral', quantity: 10, instructions: 'Take after meals' }]);
+    const medsArray = Array.isArray(prescription.medicines) ? prescription.medicines : [];
+    setEditMedicines(medsArray.length > 0 ? [...medsArray] : [{ name: '', strength: '', dosage: '1 tablet', frequency: 'Once a day', duration: '7 days', route: 'Oral', quantity: 10, instructions: 'Take after meals' }]);
     setSelectedPatientId(prescription.patientId);
     setIsEditModalOpen(true);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPrescription || editMedicines.length === 0) return;
 
     const validMedicines = editMedicines.filter(m => m.name.trim() !== '');
     if (validMedicines.length === 0) return;
 
-    db.updatePrescription(editingPrescription.id, {
+    await db.updatePrescription(editingPrescription.id, {
       medicines: validMedicines.map(m => ({
         name: m.name,
         strength: m.strength,
@@ -167,15 +201,15 @@ export function Prescriptions() {
       }))
     });
 
-    setPrescriptions(db.getPrescriptions());
+    loadData();
     setIsEditModalOpen(false);
     setEditingPrescription(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this prescription? This cannot be undone.")) {
-      db.deletePrescription(id);
-      setPrescriptions(db.getPrescriptions());
+      await db.deletePrescription(id);
+      loadData();
     }
   };
 
@@ -498,7 +532,7 @@ export function Prescriptions() {
           <tbody>
             {filteredPrescriptions.map((prescription) => (
               <tr key={prescription.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                <Td className="font-semibold text-slate-700 dark:text-slate-350">#{prescription.id}</Td>
+                 <Td className="font-semibold text-slate-700 dark:text-slate-300">#{prescription.id}</Td>
                 <Td>{prescription.patientName}</Td>
                 <Td>{prescription.medSummary}</Td>
                 <Td>{prescription.date}</Td>
@@ -506,7 +540,7 @@ export function Prescriptions() {
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => setPrintPresc(prescription)} 
-                      className="text-sky-500 hover:text-sky-655 font-semibold flex items-center gap-1 text-[12px]"
+                      className="text-sky-500 hover:text-sky-600 font-semibold flex items-center gap-1 text-[12px]"
                     >
                       <Printer size={12} /> Print
                     </button>

@@ -2,20 +2,38 @@ import { Card } from '@/components/ui/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Download, Table2, CheckCircle2, FileText } from 'lucide-react';
 import { Table, Th, Td } from '@/components/ui/Table';
-import { useState, useMemo } from 'react';
-import { db } from '@/services/db';
+import { useState, useMemo, useEffect } from 'react';
+import { getLocalDate, getLocalDateTime } from '@/lib/dates';
+import { db, getStorageItem, setStorageItem } from '@/services/db';
 import { Modal } from '@/components/ui/Modal';
 import { generatePDF } from '@/components/print-templates/pdfExport';
 import { ReportPrintTemplate } from '@/components/print-templates/ReportPrintTemplate';
+import { onDbChange } from '@/services/db';
 
 export function Reports() {
   const [isExporting, setIsExporting] = useState(false);
   const [previewReport, setPreviewReport] = useState<{ type: 'summary' | 'patients' | 'consultations'; title: string } | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [exportLogs, setExportLogs] = useState<{ reportName: string; platform: string; type: string; exportedAt: string }[]>(() => getStorageItem('emr_export_logs', []));
+  const [, setRefreshTick] = useState(0);
 
-  const patients = db.getPatients();
-  const consultations = db.getConsultations();
-  const appointments = db.getAppointments();
+  const [patients, setPatients] = useState(() => db.getPatientsSync());
+  const [consultations, setConsultations] = useState(() => db.getConsultationsSync());
+  const [appointments, setAppointments] = useState(() => db.getAppointmentsSync());
+
+  const loadData = () => {
+    db.getPatients().then(setPatients);
+    db.getConsultations().then(setConsultations);
+    db.getAppointments().then(setAppointments);
+  };
+
+  useEffect(() => {
+    loadData();
+    const unsub = onDbChange('patients:changed', loadData);
+    const unsub2 = onDbChange('consultations:changed', loadData);
+    const unsub3 = onDbChange('appointments:changed', loadData);
+    return () => { unsub(); unsub2(); unsub3(); };
+  }, []);
 
   // Metrics
   const totalConsultations = consultations.length;
@@ -50,7 +68,8 @@ export function Reports() {
     let bracket4 = 0; // 60+
 
     patients.forEach(p => {
-      const age = new Date().getFullYear() - new Date(p.dob).getFullYear();
+      const birthYear = p.dob ? new Date(p.dob).getFullYear() : NaN;
+      const age = isNaN(birthYear) ? 0 : new Date().getFullYear() - birthYear;
       if (age <= 19) bracket1++;
       else if (age <= 39) bracket2++;
       else if (age <= 59) bracket3++;
@@ -66,27 +85,39 @@ export function Reports() {
     ];
   }, [patients]);
 
-  // Monthly trends mockup (using real total counts distributed across months)
-  const revenueData = [
-    { name: 'JAN', consultations: Math.round(totalConsultations * 0.1) || 2, appointments: Math.round(upcomingFollowups * 0.1) || 1 },
-    { name: 'FEB', consultations: Math.round(totalConsultations * 0.12) || 3, appointments: Math.round(upcomingFollowups * 0.1) || 1 },
-    { name: 'MAR', consultations: Math.round(totalConsultations * 0.15) || 4, appointments: Math.round(upcomingFollowups * 0.1) || 1 },
-    { name: 'APR', consultations: Math.round(totalConsultations * 0.18) || 5, appointments: Math.round(upcomingFollowups * 0.15) || 2 },
-    { name: 'MAY', consultations: Math.round(totalConsultations * 0.2) || 6, appointments: Math.round(upcomingFollowups * 0.2) || 2 },
-    { name: 'JUN', consultations: Math.round(totalConsultations * 0.25) || 8, appointments: Math.round(upcomingFollowups * 0.35) || 4 },
-  ];
+  const revenueData = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    const now = new Date();
+    return months.map((m, idx) => {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1);
+      const year = monthDate.getFullYear();
+      const month = String(monthDate.getMonth() + 1).padStart(2, '0');
+      const monthStr = `${year}-${month}`;
+      const count = consultations.filter(c => c.date && c.date.startsWith(monthStr)).length;
+      const aptCount = appointments.filter(a => a.date && a.date.startsWith(monthStr)).length;
+      return { name: m, consultations: count, appointments: aptCount };
+    });
+  }, [consultations, appointments]);
 
   // Helper to trigger CSV file download
   const triggerCSVDownload = (filename: string, headers: string[], rows: string[][]) => {
     const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(r => r.map(val => `"${val.replace(/"/g, '""')}"`).join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+      + [headers.join(','), ...rows.map(r => r.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const encodedUri = encodeURIComponent(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
     link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    logExportEvent(filename.replace('.csv', ''), 'CSV');
+  };
+
+  const logExportEvent = (reportName: string, type: string) => {
+    const key = 'emr_export_logs';
+    const logs = getStorageItem<{ reportName: string; platform: string; type: string; exportedAt: string }[]>(key, []);
+    logs.unshift({ reportName, platform: 'Local Browser Session', type, exportedAt: getLocalDateTime() });
+    setStorageItem(key, logs.slice(0, 100));
   };
 
   const handleCSVExport = (type: string) => {
@@ -129,7 +160,7 @@ export function Reports() {
     if (!previewReport) return;
     setIsGeneratingPDF(true);
     try {
-      const filename = `${previewReport.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+      const filename = `${previewReport.title.replace(/\s+/g, '_')}_${getLocalDate()}`;
       await generatePDF('printable-report-area', filename);
     } catch (error) {
       console.error('Failed to generate PDF:', error);
@@ -184,7 +215,7 @@ export function Reports() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} dy={10} />
                   <YAxis hide />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ borderRadius: '4px', border: '1px solid var(--tooltip-border)', backgroundColor: 'var(--tooltip-bg)', color: 'var(--tooltip-text)', fontSize: '11px', padding: '6px' }}
                     cursor={{ fill: 'var(--tooltip-cursor)' }}
                   />
@@ -278,16 +309,17 @@ export function Reports() {
                 </tr>
               </thead>
               <tbody>
-                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                  <Td className="font-semibold text-slate-700 dark:text-slate-350">Monthly EMR Summary</Td>
-                  <Td className="text-slate-500">Local Browser Session</Td>
-                  <Td><span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[9px] font-bold">CSV</span></Td>
-                </tr>
-                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                  <Td className="font-semibold text-slate-700 dark:text-slate-350">Patient Demographics Export</Td>
-                  <Td className="text-slate-500">Local Browser Session</Td>
-                  <Td><span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[9px] font-bold">CSV</span></Td>
-                </tr>
+                {exportLogs.length > 0 ? exportLogs.map((log, i) => (
+                  <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <Td className="font-semibold text-slate-700 dark:text-slate-300">{log.reportName}</Td>
+                    <Td className="text-slate-500">{log.platform}</Td>
+                    <Td><span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[9px] font-bold">{log.type}</span></Td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <Td colSpan={3} className="text-center py-4 text-slate-500 text-[12px]">No exports recorded yet.</Td>
+                  </tr>
+                )}
               </tbody>
             </Table>
          </div>
