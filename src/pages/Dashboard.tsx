@@ -1,20 +1,32 @@
 import { Card } from '@/components/ui/Card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Download, Users, CalendarPlus, Pill, Clock, Heart, ShieldAlert, Award } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { Download, Users, CalendarPlus, Pill, FileText, Clock, Heart, ShieldAlert, Award } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { getLocalDate } from '@/lib/dates';
 import { Link } from 'react-router-dom';
 import { db } from '@/services/db';
+import { onDbChange } from '@/services/db';
 
 export function Dashboard() {
   const [isExporting, setIsExporting] = useState(false);
+  const [, setRefreshTick] = useState(0);
 
-  const patients = db.getPatients();
-  const consultations = db.getConsultations();
-  const appointments = db.getAppointments();
-  const certificates = db.getCertificates();
-  const logs = db.getActivityLogs();
+  useEffect(() => {
+    const unsub1 = onDbChange('patients:changed', () => setRefreshTick(t => t + 1));
+    const unsub2 = onDbChange('consultations:changed', () => setRefreshTick(t => t + 1));
+    const unsub3 = onDbChange('appointments:changed', () => setRefreshTick(t => t + 1));
+    const unsub4 = onDbChange('certificates:changed', () => setRefreshTick(t => t + 1));
+    const unsub5 = onDbChange('logs:changed', () => setRefreshTick(t => t + 1));
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
+  }, []);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const patients = db.getPatientsSync();
+  const consultations = db.getConsultationsSync();
+  const appointments = db.getAppointmentsSync();
+  const certificates = db.getCertificatesSync();
+  const logs = db.getActivityLogsSync();
+
+  const todayStr = getLocalDate();
 
   // Dynamic counts
   const totalPatientsCount = patients.length;
@@ -23,12 +35,16 @@ export function Dashboard() {
   const certificatesCount = certificates.length;
 
   const chartData = useMemo(() => {
-    // Generate simple chart data mapping last 6 months
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-    return months.map((m, idx) => ({
-      name: m,
-      visits: idx === 5 ? consultations.length : Math.max(2, Math.round(consultations.length * (0.4 + idx * 0.1)))
-    }));
+    const now = new Date();
+    return months.map((m, idx) => {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1);
+      const year = monthDate.getFullYear();
+      const month = String(monthDate.getMonth() + 1).padStart(2, '0');
+      const monthStr = `${year}-${month}`;
+      const count = consultations.filter(c => c.date && c.date.startsWith(monthStr)).length;
+      return { name: m, visits: count };
+    });
   }, [consultations]);
 
   const handleExport = () => {
@@ -96,11 +112,11 @@ export function Dashboard() {
           </div>
           <span className="text-[12px] font-semibold text-emerald-900 dark:text-emerald-400">Prescribe</span>
         </Link>
-        <Link to="/patients" className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-950/50 p-3 rounded-md flex items-center gap-3 hover:bg-amber-100 dark:hover:bg-amber-950/40 transition-colors group">
-          <div className="bg-amber-100 dark:bg-amber-900 p-2 rounded text-amber-600 dark:text-amber-400 group-hover:bg-amber-200 transition-colors">
-            <Heart size={16} />
+        <Link to="/consultations" className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-950/50 p-3 rounded-md flex items-center gap-3 hover:bg-rose-100 dark:hover:bg-rose-950/40 transition-colors group">
+          <div className="bg-rose-100 dark:bg-rose-900 p-2 rounded text-rose-600 dark:text-rose-400 group-hover:bg-rose-200 transition-colors">
+            <FileText size={16} />
           </div>
-          <span className="text-[12px] font-semibold text-amber-900 dark:text-amber-400">Record Vitals</span>
+          <span className="text-[12px] font-semibold text-rose-900 dark:text-rose-400">Consultation</span>
         </Link>
       </div>
 
@@ -141,7 +157,7 @@ export function Dashboard() {
           <div className="flex-1 p-4 overflow-y-auto space-y-4 max-h-[256px]">
             {logs.slice(0, 5).map((activity, i) => (
               <div key={i} className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-850 flex items-center justify-center shrink-0">
+                 <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-700 flex items-center justify-center shrink-0">
                   {activity.action.includes('Backup') || activity.action.includes('Restore') ? (
                     <ShieldAlert size={14} className="text-amber-500" />
                   ) : activity.action.includes('Certificate') ? (
@@ -151,8 +167,8 @@ export function Dashboard() {
                   )}
                 </div>
                 <div>
-                  <p className="text-[12px] text-slate-700 dark:text-slate-350 leading-snug font-medium">{activity.action}</p>
-                  <p className="text-[10px] text-slate-450 dark:text-slate-400 mt-0.5">{activity.description}</p>
+                  <p className="text-[12px] text-slate-700 dark:text-slate-300 leading-snug font-medium">{activity.action}</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{activity.description}</p>
                   <span className="text-[9px] text-slate-400 font-mono font-medium block mt-0.5">{activity.createdAt}</span>
                 </div>
               </div>
