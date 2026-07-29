@@ -335,18 +335,20 @@ export function Appointments() {
                         </button>
                       </div>
                     )}
-                    <div className="mt-2 flex gap-1">
+                    <div className="mt-2 flex gap-2">
                       <button 
                         onClick={() => handleEditClick(apt)}
-                        className="text-[10px] text-sky-500 hover:text-sky-700 font-semibold flex items-center gap-0.5"
+                        className="text-sky-500 hover:text-sky-700 p-0.5"
+                        title="Edit"
                       >
-                        <Edit2 size={10} /> Edit
+                        <Edit2 size={10} />
                       </button>
                       <button 
                         onClick={() => handleDelete(apt.id)}
-                        className="text-[10px] text-red-500 hover:text-red-700 font-semibold flex items-center gap-0.5"
+                        className="text-red-500 hover:text-red-700 p-0.5"
+                        title="Delete"
                       >
-                        <Trash2 size={10} /> Delete
+                        <Trash2 size={10} />
                       </button>
                     </div>
                   </div>
