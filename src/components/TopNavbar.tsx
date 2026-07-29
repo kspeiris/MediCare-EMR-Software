@@ -92,7 +92,7 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout, onToggleSidebar }: 
         {showSearch && (
           <div className="absolute top-full left-0 min-w-[320px] max-w-[500px] mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg overflow-hidden z-50">
             <div className="flex justify-between items-center px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">EMR Global Search</span>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Doctor Global Search</span>
               <button onClick={() => setShowSearch(false)} className="text-slate-400 hover:text-slate-600"><X size={14}/></button>
             </div>
             <div className="p-2 space-y-4 max-h-[300px] overflow-y-auto">

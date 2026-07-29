@@ -206,7 +206,7 @@ export function ReportPrintTemplate({ type, doctor, data }: ReportPrintTemplateP
         <div className="flex justify-between items-end">
           <div>
             <p>Generated: {generatedAt}</p>
-            <p className="mt-1">Medicare EMR Systems - Confidential Medical Records</p>
+            <p className="mt-1">MediCare Doctor Workspace - Confidential Medical Records</p>
           </div>
           <div className="text-center w-48 border-t border-slate-300 pt-2">
             <p className="font-bold text-slate-800">{doctor.name}</p>

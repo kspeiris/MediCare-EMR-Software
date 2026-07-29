@@ -163,7 +163,7 @@ export function ConsultationPrintTemplate({ consultation, patient, doctor }: Con
           <div className="text-xs text-slate-500">
             <p>Consultation ID: {consultation.id}</p>
             <p>Generated: {new Date().toLocaleString()}</p>
-            <p className="mt-2">Powered by MediCare EMR System</p>
+            <p className="mt-2">Powered by MediCare Doctor Workspace</p>
           </div>
           <div className="text-center w-48">
             {doctor.signature ? (

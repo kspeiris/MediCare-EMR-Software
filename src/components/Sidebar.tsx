@@ -40,7 +40,7 @@ export function Sidebar({ onLogout, isOpen = false, onClose }: SidebarProps) {
             </div>
             <div>
               <h1 className="font-extrabold text-[16px] tracking-tight text-slate-50 leading-tight">MediCare</h1>
-              <p className="text-[10px] text-slate-500 uppercase font-semibold mt-0.5">EMR System</p>
+              <p className="text-[10px] text-slate-500 uppercase font-semibold mt-0.5">Doctor Workspace</p>
             </div>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-50 p-1">

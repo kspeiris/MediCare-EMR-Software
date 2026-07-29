@@ -218,7 +218,7 @@ export function PatientSummaryPrintTemplate({
         <div className="flex justify-between items-end">
           <div className="text-xs text-slate-500">
             <p>Generated: {new Date().toLocaleString()}</p>
-            <p className="mt-2">Powered by MediCare EMR System</p>
+            <p className="mt-2">Powered by MediCare Doctor Workspace</p>
           </div>
             <div className="text-center w-48">
               <div className="h-12 border-b-2 border-slate-300 mb-1"></div>

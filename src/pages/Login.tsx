@@ -56,7 +56,7 @@ export function Login({ onLogin }: LoginProps) {
             <img src="/Applogo.png" alt="Logo" className="w-full h-full object-contain block" />
           </div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">MediCare EMR</h2>
-          <p className="text-sm text-slate-500 mt-1">Secure local workspace access</p>
+          <p className="text-sm text-slate-500 mt-1">Secure local doctor workspace access</p>
         </div>
 
         <div className="p-8">
@@ -137,7 +137,7 @@ export function Login({ onLogin }: LoginProps) {
       </div>
 
       <div className="mt-8 text-center text-xs text-slate-400 space-y-1">
-        <p>MediCare EMR System v2.0.0 (Encrypted Local Mode)</p>
+        <p>MediCare Doctor Workspace v2.0.0 (Encrypted Local Mode)</p>
         <p>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
       </div>
     </div>

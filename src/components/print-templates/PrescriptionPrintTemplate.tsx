@@ -123,7 +123,7 @@ export function PrescriptionPrintTemplate({ prescription, patient, doctor }: Pre
           <div className="text-xs text-slate-500">
             <p>Prescription ID: {prescription.id}</p>
             <p>Generated: {new Date().toLocaleString()}</p>
-            <p className="mt-2">Powered by MediCare EMR System</p>
+            <p className="mt-2">Powered by MediCare Doctor Workspace</p>
           </div>
           <div className="text-center w-48">
             {doctor.signature ? (
