@@ -1,5 +1,5 @@
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { HeartPulse, Stethoscope, AlertTriangle, Printer, PlusCircle, Download, FileBadge, Trash2, Calendar, FileText, User, Edit2 } from 'lucide-react';
+import { HeartPulse, Stethoscope, AlertTriangle, Printer, PlusCircle, Download, FileBadge, Trash2, Calendar, FileText, User, Edit2, Camera } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { useState, useMemo, useEffect } from 'react';
 import { getLocalDate } from '@/lib/dates';
@@ -274,6 +274,38 @@ export function PatientProfile() {
     }
   };
 
+  const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!patient || !id) return;
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Str = reader.result as string;
+        try {
+          await db.updatePatient(id, { profilePic: base64Str });
+          setPatient({ ...patient, profilePic: base64Str });
+        } catch (err) {
+          console.error('Failed to update profile picture:', err);
+          alert('Failed to save profile picture.');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveProfilePic = async () => {
+    if (!patient || !id) return;
+    if (window.confirm("Remove profile picture?")) {
+      try {
+        await db.updatePatient(id, { profilePic: '' });
+        setPatient({ ...patient, profilePic: undefined });
+      } catch (err) {
+        console.error('Failed to remove profile picture:', err);
+        alert('Failed to remove profile picture.');
+      }
+    }
+  };
+
   return (
     <div className="p-5 space-y-4">
       {/* Breadcrumbs */}
@@ -288,8 +320,27 @@ export function PatientProfile() {
       {/* Header Profile Card */}
       <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-5 flex items-start justify-between print-container">
         <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-full bg-sky-100 dark:bg-sky-950 flex items-center justify-center font-bold text-sky-700 dark:text-sky-400 text-[22px]">
-            {patient.firstName[0]}{patient.lastName[0]}
+          <div className="relative">
+            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-800 bg-sky-100 dark:bg-sky-950 flex items-center justify-center font-bold text-sky-700 dark:text-sky-400 text-[22px] relative group">
+              {patient.profilePic ? (
+                <img src={patient.profilePic} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span>{patient.firstName[0]}{patient.lastName[0]}</span>
+              )}
+              <label className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                <Camera className="text-white" size={16} />
+                <input type="file" accept="image/*" onChange={handleProfilePicChange} className="hidden" />
+              </label>
+            </div>
+            {patient.profilePic && (
+              <button 
+                onClick={handleRemoveProfilePic} 
+                className="absolute -bottom-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md no-print" 
+                title="Remove Photo"
+              >
+                <Trash2 size={11} />
+              </button>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-2 mb-1">
