@@ -10,6 +10,9 @@ import { generatePDF } from '@/components/print-templates/pdfExport';
 import { onDbChange } from '@/services/db';
 import { ConditionHistory } from '@/components/patient/ConditionHistory';
 import { AttachmentViewer } from '@/components/patient/AttachmentViewer';
+import { AllergyAlerts } from '@/components/patient/AllergyAlerts';
+import { TimelineView, buildTimeline } from '@/components/patient/TimelineView';
+import { VitalsChart } from '@/components/patient/VitalsChart';
 
 export function PatientProfile() {
   const { id } = useParams<{ id: string }>();
@@ -54,6 +57,7 @@ export function PatientProfile() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [bannerMessage, setBannerMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'consultations' | 'certificates'>('timeline');
   
   const [docName, setDocName] = useState('');
   const [docType, setDocType] = useState('Laboratory Reports');
@@ -274,6 +278,11 @@ export function PatientProfile() {
     }
   };
 
+  const timelineEvents = useMemo(() => 
+    buildTimeline(consultations, prescriptions, certificates, documents, referrals),
+    [consultations, prescriptions, certificates, documents, referrals]
+  );
+
   const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!patient || !id) return;
     const file = e.target.files?.[0];
@@ -384,6 +393,13 @@ export function PatientProfile() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Column (Medical History, Vitals, Documents) */}
         <div className="lg:col-span-1 space-y-4 no-print">
+          {/* Allergy & Interaction Alerts */}
+          <AllergyAlerts 
+            allergies={patient.allergies || []} 
+            currentMedications={patient.chronicDiseases || ''} 
+            consultations={consultations.map(c => ({ diagnosis: c.diagnosis, medicines: prescriptions.find(p => p.consultationId === c.id)?.medicines || [] }))} 
+          />
+
           {/* Medical History */}
           <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
             <div className="flex justify-between items-center mb-4">
@@ -407,12 +423,12 @@ export function PatientProfile() {
 
               <div>
                 <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Chronic Conditions</div>
-                <p className="text-slate-700 dark:text-slate-300 text-xs font-medium leading-relaxed">{patient.chronicDiseases || 'None recorded'}</p>
+                <p className="text-slate-700 dark:text-slate-350 text-xs font-medium leading-relaxed">{patient.chronicDiseases || 'None recorded'}</p>
               </div>
 
               <div>
                 <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Habits</div>
-                <div className="text-xs text-slate-700 dark:text-slate-300 flex gap-4 font-semibold">
+                <div className="text-xs text-slate-700 dark:text-slate-350 flex gap-4 font-semibold">
                   <span>Smoking: <span className="font-normal">{patient.smokingStatus}</span></span>
                   <span>Alcohol: <span className="font-normal">{patient.alcoholConsumption}</span></span>
                 </div>
@@ -426,6 +442,14 @@ export function PatientProfile() {
             <ConditionHistory consultations={consultations} />
           </div>
 
+          {/* Longitudinal Vitals Chart */}
+          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+            <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-3">Longitudinal Vitals</h3>
+            <div className="h-[210px] w-full">
+              <VitalsChart consultations={consultations} />
+            </div>
+          </div>
+
           {/* Attachments */}
           <AttachmentViewer
             documents={documents}
@@ -435,72 +459,118 @@ export function PatientProfile() {
           />
         </div>
 
-        {/* Right Column - Consultation History / Certificates */}
+        {/* Right Column - Tabbed View of Patient Records */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
-            <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-4">Consultation Logs</h3>
-            <div className="space-y-5">
-              {consultations.length > 0 ? (
-                consultations.map((c) => {
-                  const presc = prescriptions.find(p => p.consultationId === c.id);
-                  return (
-                    <div key={c.id} className="border-l-2 border-sky-500 pl-4 py-1 space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{c.chiefComplaint}</h4>
-                          <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1"><Calendar size={12}/> {c.date} at {c.time}</span>
-                        </div>
-                        <Badge variant="default">CNS-ID: {c.id}</Badge>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded text-xs space-y-2">
-                        <p><strong>Diagnosis:</strong> {c.diagnosis || 'None'}</p>
-                        <p><strong>Plan/Notes:</strong> {c.treatmentPlan || 'None'}</p>
-                        {c.vitals && (
-                          <p className="text-[11px] text-slate-500">
-                            <strong>Vitals:</strong> BP: {c.vitals.bloodPressure} | Temp: {c.vitals.temperature}°F | Pulse: {c.vitals.pulseRate}bpm | SpO2: {c.vitals.oxygenSaturation}%
-                          </p>
-                        )}
-                        {presc && presc.medicines && presc.medicines.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                            <span className="font-semibold block mb-1">Prescribed Medications:</span>
-                            <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-400 text-[11px]">
-                              {presc.medicines.map((m, i) => (
-                                <li key={i}>{m.name} {m.strength} - {m.frequency} for {m.duration} ({m.instructions})</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-8 text-slate-400 text-xs">
-                  <FileText className="mx-auto text-slate-300 mb-2" size={32} />
-                  No consultation records yet.
-                </div>
-              )}
-            </div>
+          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-1 flex gap-1 no-print">
+            <button
+              onClick={() => setActiveTab('timeline')}
+              className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${
+                activeTab === 'timeline'
+                  ? 'bg-sky-500 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              Timeline View
+            </button>
+            <button
+              onClick={() => setActiveTab('consultations')}
+              className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${
+                activeTab === 'consultations'
+                  ? 'bg-sky-500 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              Consultation Logs
+            </button>
+            <button
+              onClick={() => setActiveTab('certificates')}
+              className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${
+                activeTab === 'certificates'
+                  ? 'bg-sky-500 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              Issued Certificates
+            </button>
           </div>
 
-          {/* Medical Certificates Issued */}
-          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
-            <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-3">Issued Medical Certificates</h3>
-            <div className="space-y-3">
-              {certificates.length > 0 ? (
-                certificates.map((cert) => (
-                  <div key={cert.id} className="p-3 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded flex justify-between items-center">
-                    <div>
-                      <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">Rest: {cert.restPeriod}</div>
-                      <div className="text-[11px] text-slate-500">Diagnosis: {cert.diagnosis} • Issued {cert.issueDate}</div>
+          {/* Tab Content */}
+          <div className="space-y-4">
+            {activeTab === 'timeline' && (
+              <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+                <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-4">Patient Timeline</h3>
+                <TimelineView events={timelineEvents} />
+              </div>
+            )}
+
+            {activeTab === 'consultations' && (
+              <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+                <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-4">Consultation Logs</h3>
+                <div className="space-y-5">
+                  {consultations.length > 0 ? (
+                    consultations.map((c) => {
+                      const presc = prescriptions.find(p => p.consultationId === c.id);
+                      return (
+                        <div key={c.id} className="border-l-2 border-sky-500 pl-4 py-1 space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{c.chiefComplaint}</h4>
+                              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1"><Calendar size={12}/> {c.date} at {c.time}</span>
+                            </div>
+                            <Badge variant="default">CNS-ID: {c.id}</Badge>
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded text-xs space-y-2">
+                            <p><strong>Diagnosis:</strong> {c.diagnosis || 'None'}</p>
+                            <p><strong>Plan/Notes:</strong> {c.treatmentPlan || 'None'}</p>
+                            {c.vitals && (
+                              <p className="text-[11px] text-slate-500">
+                                <strong>Vitals:</strong> BP: {c.vitals.bloodPressure} | Temp: {c.vitals.temperature}°F | Pulse: {c.vitals.pulseRate}bpm | SpO2: {c.vitals.oxygenSaturation}%
+                              </p>
+                            )}
+                            {presc && presc.medicines && presc.medicines.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                                <span className="font-semibold block mb-1">Prescribed Medications:</span>
+                                <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-400 text-[11px]">
+                                  {presc.medicines.map((m, i) => (
+                                    <li key={i}>{m.name} {m.strength} - {m.frequency} for {m.duration} ({m.instructions})</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8 text-slate-400 text-xs">
+                      <FileText className="mx-auto text-slate-300 mb-2" size={32} />
+                      No consultation records yet.
                     </div>
-                    <Badge variant="warning">{cert.id}</Badge>
-                  </div>
-                ))
-              ) : (
-                <span className="text-slate-400 text-xs">No medical certificates issued yet.</span>
-              )}
-            </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'certificates' && (
+              <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+                <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-3">Issued Medical Certificates</h3>
+                <div className="space-y-3">
+                  {certificates.length > 0 ? (
+                    certificates.map((cert) => (
+                      <div key={cert.id} className="p-3 border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 rounded flex justify-between items-center">
+                        <div>
+                          <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">Rest: {cert.restPeriod}</div>
+                          <div className="text-[11px] text-slate-500">Diagnosis: {cert.diagnosis} • Issued {cert.issueDate}</div>
+                        </div>
+                        <Badge variant="warning">{cert.id}</Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-slate-400 text-xs">No medical certificates issued yet.</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
