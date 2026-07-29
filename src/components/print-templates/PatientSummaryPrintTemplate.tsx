@@ -25,7 +25,7 @@ export function PatientSummaryPrintTemplate({
   const age = new Date().getFullYear() - new Date(patient.dob).getFullYear();
 
   return (
-    <div className="print-page mx-auto bg-white text-slate-900 font-sans shadow-lg">
+    <div className="print-page mx-auto bg-white text-slate-900 font-sans p-8 rounded-sm max-w-[210mm] min-h-[297mm]">
       {/* Header */}
       <div className="border-b-4 border-sky-600 pb-4 mb-6">
         <div className="flex justify-between items-start">

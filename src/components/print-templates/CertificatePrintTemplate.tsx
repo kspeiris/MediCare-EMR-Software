@@ -10,7 +10,7 @@ export function CertificatePrintTemplate({ certificate, patient, doctor }: Certi
   const age = patient ? new Date().getFullYear() - new Date(patient.dob).getFullYear() : 'N/A';
 
   return (
-    <div className="print-page mx-auto bg-white text-slate-900 font-sans shadow-lg">
+    <div className="print-page mx-auto bg-white text-slate-900 font-sans p-8 rounded-sm max-w-[210mm] min-h-[297mm]">
       {/* Header */}
       <div className="border-b-4 border-sky-600 pb-4 mb-6">
         <div className="flex justify-between items-start">
@@ -43,7 +43,7 @@ export function CertificatePrintTemplate({ certificate, patient, doctor }: Certi
       </div>
 
       {/* Certificate Body */}
-      <div className="px-8 py-6 mb-8">
+      <div className="py-6 mb-8">
         <div className="text-base leading-relaxed text-slate-800 space-y-4">
           <p className="text-justify">
             This is to certify that I have professionally examined{' '}
@@ -71,7 +71,7 @@ export function CertificatePrintTemplate({ certificate, patient, doctor }: Certi
       </div>
 
       {/* Footer */}
-      <div className="mt-auto pt-8 border-t-2 border-slate-200 px-8">
+      <div className="mt-auto pt-8 border-t-2 border-slate-200">
         <div className="flex justify-between items-end">
           <div className="text-xs text-slate-500 space-y-1">
             <p>
