@@ -4,10 +4,12 @@ import { Badge } from '@/components/ui/Badge';
 import { useState, useMemo, useEffect } from 'react';
 import { getLocalDate } from '@/lib/dates';
 import { Modal } from '@/components/ui/Modal';
-import { db, Patient, Consultation, MedicalDocument, MedicalCertificate, Prescription, validateVitals, getDoctorProfileSync } from '@/services/db';
+import { db, Patient, Consultation, MedicalDocument, MedicalCertificate, Prescription, validateVitals, getDoctorProfileSync, Referral } from '@/services/db';
 import { PatientSummaryPrintTemplate } from '@/components/print-templates/PatientSummaryPrintTemplate';
 import { generatePDF } from '@/components/print-templates/pdfExport';
 import { onDbChange } from '@/services/db';
+import { ConditionHistory } from '@/components/patient/ConditionHistory';
+import { AttachmentViewer } from '@/components/patient/AttachmentViewer';
 
 export function PatientProfile() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +19,7 @@ export function PatientProfile() {
   const [documents, setDocuments] = useState<MedicalDocument[]>([]);
   const [certificates, setCertificates] = useState<MedicalCertificate[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [referrals, setReferrals] = useState<Referral[]>([]);
 
   const loadData = () => {
     if (!id) return;
@@ -25,6 +28,7 @@ export function PatientProfile() {
     db.getDocumentsByPatient(id).then(setDocuments);
     db.getCertificates().then(certs => setCertificates(certs.filter(c => c.patientId === id)));
     db.getPrescriptionsByPatient(id).then(setPrescriptions);
+    db.getReferralsByPatient(id).then(setReferrals);
   };
 
   useEffect(() => {
@@ -38,7 +42,8 @@ export function PatientProfile() {
     const unsub3 = onDbChange('documents:changed', loadData);
     const unsub4 = onDbChange('certificates:changed', loadData);
     const unsub5 = onDbChange('prescriptions:changed', loadData);
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
+    const unsub6 = onDbChange('referrals:changed', loadData);
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); unsub6(); };
   }, [id]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -364,56 +369,19 @@ export function PatientProfile() {
             </div>
           </div>
 
-          {/* Vitals History */}
-          <div className="bg-sky-50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900 p-4 rounded-md">
-            <h3 className="text-[13px] font-bold text-sky-900 dark:text-sky-400 uppercase tracking-wide mb-3">Vitals History</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-[10px] text-sky-700 dark:text-sky-400 block uppercase font-medium">Height</span>
-                <span className="text-lg font-bold text-sky-950 dark:text-sky-200">{patient.height} <span className="text-[10px] font-normal">cm</span></span>
-              </div>
-              <div>
-                <span className="text-[10px] text-sky-700 dark:text-sky-400 block uppercase font-medium">Weight</span>
-                <span className="text-lg font-bold text-sky-950 dark:text-sky-200">{patient.weight} <span className="text-[10px] font-normal">kg</span></span>
-              </div>
-              <div className="col-span-2 border-t border-sky-100 dark:border-sky-900/50 pt-2">
-                <span className="text-[10px] text-sky-700 dark:text-sky-400 block uppercase font-medium">Body Mass Index (BMI)</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl font-black text-sky-950 dark:text-sky-200">{patient.bmi || 'N/A'}</span>
-                  <Badge variant={patient.bmi && patient.bmi > 25 ? 'warning' : 'default'}>
-                    {patient.bmi && patient.bmi < 18.5 ? 'Underweight' : patient.bmi && patient.bmi < 25 ? 'Normal' : 'Overweight'}
-                  </Badge>
-                </div>
-              </div>
-            </div>
+          {/* Condition History */}
+          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+            <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-3">Condition History</h3>
+            <ConditionHistory consultations={consultations} />
           </div>
 
-          {/* Documents Upload Section */}
-          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide">Lab & Imaging Files</h3>
-              <button onClick={() => setIsUploadDocOpen(true)} className="text-sky-500 hover:text-sky-700 text-[11px] font-semibold">+ Upload</button>
-            </div>
-            <div className="space-y-2">
-              {documents.length > 0 ? (
-                documents.map((doc) => (
-                  <div key={doc.id} className="p-2 border border-slate-100 dark:border-slate-800 rounded bg-slate-50 dark:bg-slate-950 flex justify-between items-center">
-                    <div>
-                      <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[160px]">{doc.name}</div>
-                      <div className="text-[10px] text-slate-400">{doc.type} • {doc.uploadDate}</div>
-                    </div>
-                     <div className="flex items-center gap-2">
-                       <a href={doc.fileData} download={doc.name} className="text-sky-500 hover:text-sky-700 p-1"><Download size={13} /></a>
-                       <button onClick={() => handleEditDocClick(doc)} className="text-slate-400 hover:text-slate-600 p-1"><Edit2 size={13} /></button>
-                       <button onClick={() => handleDeleteDoc(doc.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={13} /></button>
-                     </div>
-                  </div>
-                ))
-              ) : (
-                <span className="text-slate-400 text-xs block py-2">No uploaded reports.</span>
-              )}
-            </div>
-          </div>
+          {/* Attachments */}
+          <AttachmentViewer
+            documents={documents}
+            referrals={referrals}
+            onClose={() => {}}
+            onUploadClick={() => setIsUploadDocOpen(true)}
+          />
         </div>
 
         {/* Right Column - Consultation History / Certificates */}
