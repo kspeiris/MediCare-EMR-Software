@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { CheckCircle2, Loader2, Key, Shield, Signature } from 'lucide-react';
+import { CheckCircle2, Loader2, Key, Shield, Signature, Camera, Trash2 } from 'lucide-react';
 import { db } from '@/services/db';
 import type { DoctorProfile } from '@/services/db';
 import { onDbChange } from '@/services/db';
@@ -9,18 +9,21 @@ export function Settings() {
   const [saveComplete, setSaveComplete] = useState(false);
   const [doctor, setDoctor] = useState<DoctorProfile>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'doctor' });
   const [formDoctor, setFormDoctor] = useState<DoctorProfile>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'doctor' });
+  const [profilePic, setProfilePic] = useState('');
 
   useEffect(() => {
     const load = async () => {
       const profile = await db.getDoctorProfile();
       setDoctor(profile);
       setFormDoctor(profile);
+      setProfilePic(profile.profilePic || '');
     };
     load();
     const unsub = onDbChange('doctor:changed', async () => {
       const profile = await db.getDoctorProfile();
       setDoctor(profile);
       setFormDoctor(profile);
+      setProfilePic(profile.profilePic || '');
     });
     return unsub;
   }, []);
@@ -99,10 +102,26 @@ export function Settings() {
     e.preventDefault();
     setIsSaving(true);
     setSaveComplete(false);
-    await db.saveDoctorProfile(formDoctor);
+    await db.saveDoctorProfile({ ...formDoctor, profilePic });
     setIsSaving(false);
     setSaveComplete(true);
     setTimeout(() => setSaveComplete(false), 3000);
+  };
+
+  const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfilePic(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveProfilePic = async () => {
+    setProfilePic('');
+    await db.saveDoctorProfile({ ...formDoctor, profilePic: '' });
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -143,6 +162,29 @@ export function Settings() {
         <div className="md:col-span-2 space-y-6">
           <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
             <h3 className="text-[14px] font-semibold text-slate-900 dark:text-white mb-4">Doctor & Clinic Profile</h3>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="relative">
+                {profilePic ? (
+                  <img src={profilePic} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-sky-200 dark:border-sky-800" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-sky-100 dark:bg-sky-950 flex items-center justify-center font-bold text-sky-700 dark:text-sky-400 text-[22px]">
+                    {formDoctor.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                  </div>
+                )}
+                <label className="absolute -bottom-1 -right-1 w-6 h-6 bg-sky-500 hover:bg-sky-600 text-white rounded-full flex items-center justify-center cursor-pointer shadow-sm">
+                  <Camera size={12} />
+                  <input type="file" accept="image/*" className="hidden" onChange={handleProfilePicChange} />
+                </label>
+                {profilePic && (
+                  <button onClick={handleRemoveProfilePic} className="absolute -bottom-1 -right-0.5 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-sm" type="button">
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Upload a profile picture. This will appear in the app header.</p>
+              </div>
+            </div>
             <form className="space-y-4" onSubmit={handleSave}>
               <div className="grid grid-cols-2 gap-4">
                 <div>
