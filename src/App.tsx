@@ -10,6 +10,9 @@ import { Appointments } from '@/pages/Appointments';
 import { Reports } from '@/pages/Reports';
 import { Backup } from '@/pages/Backup';
 import { Settings } from '@/pages/Settings';
+import { Analytics } from '@/pages/Analytics';
+import { Referrals } from '@/pages/Referrals';
+import { Reminders } from '@/pages/Reminders';
 import { PatientProfile } from '@/pages/PatientProfile';
 import { Splash } from '@/pages/Splash';
 import { Login } from '@/pages/Login';
@@ -105,8 +108,11 @@ export default function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/backup" element={<Backup />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/analytics" element={<Analytics />} />
               <Route path="/logs" element={<ActivityLog />} />
               <Route path="/help" element={<Help />} />
+              <Route path="/referrals" element={<Referrals />} />
+              <Route path="/reminders" element={<Reminders />} />
             </Routes>
           </main>
         </div>

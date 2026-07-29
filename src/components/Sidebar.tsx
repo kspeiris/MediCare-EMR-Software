@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FileText, ClipboardList, Calendar, BarChart, HardDrive, Settings, LogOut, HelpCircle, FileBadge, ShieldAlert, X } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, ClipboardList, Calendar, BarChart, HardDrive, Settings, LogOut, HelpCircle, FileBadge, ShieldAlert, X, Activity, UserRoundPlus, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router-dom';
 
@@ -9,6 +9,9 @@ const navItems = [
   { name: 'Prescriptions', path: '/prescriptions', icon: ClipboardList },
   { name: 'Certificates', path: '/certificates', icon: FileBadge },
   { name: 'Appointments', path: '/appointments', icon: Calendar },
+  { name: 'Referrals', path: '/referrals', icon: UserRoundPlus },
+  { name: 'Reminders', path: '/reminders', icon: Bell },
+  { name: 'Analytics', path: '/analytics', icon: Activity },
   { name: 'Reports', path: '/reports', icon: BarChart },
   { name: 'Backup', path: '/backup', icon: HardDrive },
   { name: 'Settings', path: '/settings', icon: Settings },
