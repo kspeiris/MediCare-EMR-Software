@@ -29,6 +29,7 @@ export type Patient = {
   bmi?: number;
   vaccinationHistory: string;
   medicalNotes: string;
+  profilePic?: string;
   createdAt: string;
 };
 
@@ -75,6 +76,8 @@ export type Consultation = {
   treatmentPlan: string;
   clinicalNotes: string;
   followupDate?: string;
+  outcome?: string;
+  outcomeNotes?: string;
   vitals: VitalSigns;
   createdAt: string;
 };
@@ -107,6 +110,31 @@ export type MedicalDocument = {
   uploadDate: string;
 };
 
+export type Referral = {
+  id: string;
+  patientId: string;
+  consultationId?: string;
+  specialistName: string;
+  facility: string;
+  reason: string;
+  notes: string;
+  status: 'Pending' | 'Completed' | 'Cancelled';
+  date: string;
+  createdAt: string;
+};
+
+export type Reminder = {
+  id: string;
+  patientId: string;
+  type: 'followup' | 'appointment' | 'chart_review' | 'prescription_refill';
+  title: string;
+  message: string;
+  dueDate: string;
+  status: 'pending' | 'completed' | 'cancelled';
+  relatedId?: string;
+  createdAt: string;
+};
+
 export type ActivityLog = {
   id: string;
   action: string;
@@ -114,6 +142,18 @@ export type ActivityLog = {
   createdAt: string;
   user?: string;
   immutable?: boolean;
+};
+
+export type ChangeLog = {
+  id: string;
+  entityType: 'patient' | 'consultation' | 'prescription' | 'appointment' | 'certificate' | 'document' | 'referral' | 'reminder';
+  entityId: string;
+  field: string;
+  oldValue: string;
+  newValue: string;
+  changedAt: string;
+  changedBy?: string;
+  undoData?: any;
 };
 
 export type DoctorProfile = {
@@ -126,6 +166,7 @@ export type DoctorProfile = {
   email: string;
   signature?: string;
   role?: string;
+  profilePic?: string;
 };
 
 const INITIAL_DOCTOR: DoctorProfile = {
@@ -336,7 +377,7 @@ const invokeDb = async (action: string, table: string, payload?: any) => {
   return { success: false, error: 'Not in Electron environment' };
 };
 
-const validatePatient = (patient: Partial<Patient>): string[] => {
+const validatePatient = (patient: Partial<Patient>, excludeId?: string): string[] => {
   const errors: string[] = [];
   if (!patient.firstName?.trim()) errors.push('First name is required.');
   if (!patient.lastName?.trim()) errors.push('Last name is required.');
@@ -344,15 +385,26 @@ const validatePatient = (patient: Partial<Patient>): string[] => {
   if (!patient.dob?.trim()) errors.push('Date of birth is required.');
   if (!patient.gender) errors.push('Gender is required.');
   if (!['Male', 'Female'].includes(patient.gender)) errors.push('Gender must be Male or Female.');
-  if (patient.height && (isNaN(Number(patient.height)) || patient.height < 30 || patient.height > 250)) {
+  if (patient.height && (isNaN(Number(patient.height)) || Number(patient.height) < 30 || Number(patient.height) > 250)) {
     errors.push('Height must be between 30 and 250 cm.');
   }
-  if (patient.weight && (isNaN(Number(patient.weight)) || patient.weight < 1 || patient.weight > 500)) {
+  if (patient.weight && (isNaN(Number(patient.weight)) || Number(patient.weight) < 1 || Number(patient.weight) > 500)) {
     errors.push('Weight must be between 1 and 500 kg.');
   }
   if (patient.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patient.email)) {
     errors.push('Please provide a valid email address.');
   }
+  
+  const allPatients = syncGetPatients();
+  const duplicateNic = patient.nic?.trim() ? allPatients.find(p => p.nic && p.nic.trim() === patient.nic!.trim() && p.id !== excludeId) : null;
+  if (duplicateNic) {
+    errors.push(`A patient with NIC ${patient.nic} already exists (${duplicateNic.id}).`);
+  }
+  const duplicatePhone = patient.phone?.trim() ? allPatients.find(p => p.phone && p.phone.trim() === patient.phone!.trim() && p.id !== excludeId) : null;
+  if (duplicatePhone) {
+    errors.push(`A patient with phone ${patient.phone} already exists (${duplicatePhone.id}).`);
+  }
+  
   return errors;
 };
 
@@ -392,7 +444,10 @@ const electronCache = {
   appointments: getStorageItem('emr_appointments', [] as Appointment[]),
   certificates: getStorageItem('emr_certificates', [] as MedicalCertificate[]),
   documents: getStorageItem('emr_documents', [] as MedicalDocument[]),
+  referrals: getStorageItem('emr_referrals', [] as Referral[]),
+  reminders: getStorageItem('emr_reminders', [] as Reminder[]),
   logs: getStorageItem('emr_logs', [] as ActivityLog[]),
+  changeLogs: getStorageItem('emr_change_logs', [] as ChangeLog[]),
   doctorProfile: getStorageItem('emr_doctor_profile', INITIAL_DOCTOR)
 };
 
@@ -402,7 +457,10 @@ const syncGetPrescriptions = (): Prescription[] => (isElectron() ? (electronCach
 const syncGetAppointments = (): Appointment[] => (isElectron() ? (electronCache.appointments.length > 0 ? electronCache.appointments : getStorageItem('emr_appointments', [])) : getStorageItem('emr_appointments', []));
 const syncGetCertificates = (): MedicalCertificate[] => (isElectron() ? (electronCache.certificates.length > 0 ? electronCache.certificates : getStorageItem('emr_certificates', [])) : getStorageItem('emr_certificates', []));
 const syncGetDocuments = (): MedicalDocument[] => (isElectron() ? (electronCache.documents.length > 0 ? electronCache.documents : getStorageItem('emr_documents', [])) : getStorageItem('emr_documents', []));
+const syncGetReferrals = (): Referral[] => (isElectron() ? (electronCache.referrals.length > 0 ? electronCache.referrals : getStorageItem('emr_referrals', [])) : getStorageItem('emr_referrals', []));
+const syncGetReminders = (): Reminder[] => (isElectron() ? (electronCache.reminders.length > 0 ? electronCache.reminders : getStorageItem('emr_reminders', [])) : getStorageItem('emr_reminders', []));
 const syncGetActivityLogs = (): ActivityLog[] => (isElectron() ? (electronCache.logs.length > 0 ? electronCache.logs : getStorageItem('emr_logs', [])) : getStorageItem('emr_logs', []));
+const syncGetChangeLogs = (): ChangeLog[] => (isElectron() ? (electronCache.changeLogs.length > 0 ? electronCache.changeLogs : getStorageItem('emr_change_logs', [])) : getStorageItem('emr_change_logs', []));
 const getDoctorProfileSync = (): DoctorProfile => (isElectron() ? electronCache.doctorProfile : getStorageItem('emr_doctor_profile', INITIAL_DOCTOR));
 
 const setDoctorProfileToStorage = (profile: DoctorProfile): void => {
@@ -491,6 +549,13 @@ const reloadTable = async (table: string): Promise<void> => {
         setStorageItem('emr_logs', electronCache.logs);
       }
     }
+    if (table === 'referrals' || table === '*') {
+      const result = await invokeDb('getReferrals', 'referrals');
+      if (result.success && result.data) {
+        electronCache.referrals = result.data as Referral[];
+        setStorageItem('emr_referrals', electronCache.referrals);
+      }
+    }
     if (table === 'doctor' || table === '*') {
       const result = await invokeDb('getDoctorProfile', 'doctor');
       if (result.success && result.data) {
@@ -514,6 +579,8 @@ export const initDatabase = async (): Promise<void> => {
     emitDbChange('appointments:changed');
     emitDbChange('certificates:changed');
     emitDbChange('documents:changed');
+    emitDbChange('referrals:changed');
+    emitDbChange('reminders:changed');
     emitDbChange('logs:changed');
     emitDbChange('doctor:changed');
     emitDbChange('settings:changed');
@@ -526,6 +593,8 @@ export const initDatabase = async (): Promise<void> => {
       if (table === 'appointments' || table === '*') emitDbChange('appointments:changed');
       if (table === 'certificates' || table === '*') emitDbChange('certificates:changed');
       if (table === 'documents' || table === '*') emitDbChange('documents:changed');
+      if (table === 'referrals' || table === '*') emitDbChange('referrals:changed');
+      if (table === 'reminders' || table === '*') emitDbChange('reminders:changed');
       if (table === 'logs' || table === '*') emitDbChange('logs:changed');
       if (table === 'doctor' || table === '*') emitDbChange('doctor:changed');
       if (table === 'settings' || table === '*') emitDbChange('settings:changed');
@@ -557,7 +626,10 @@ export const db = {
   getAppointmentsSync: (): Appointment[] => syncGetAppointments(),
   getCertificatesSync: (): MedicalCertificate[] => syncGetCertificates(),
   getDocumentsSync: (): MedicalDocument[] => syncGetDocuments(),
+  getReferralsSync: (): Referral[] => syncGetReferrals(),
+  getRemindersSync: (): Reminder[] => syncGetReminders(),
   getActivityLogsSync: (): ActivityLog[] => syncGetActivityLogs(),
+  getChangeLogsSync: (): ChangeLog[] => syncGetChangeLogs(),
   getDoctorProfileSync: (): DoctorProfile => getDoctorProfileSync(),
 
   getSecureItem: async (key: string): Promise<string | null> => {
@@ -648,6 +720,7 @@ export const db = {
       if (isElectron()) electronCache.patients = updated;
 
       await db.logActivity('Patient Registration', 'Registered new patient: ' + patient.firstName + ' ' + patient.lastName + ' (' + id + ')');
+      await db.logChange('patient', id, 'created', '', 'New patient registered', patient);
       emitDbChange('patients:changed');
       return newPatient;
     });
@@ -658,16 +731,25 @@ export const db = {
       const existingList = syncGetPatients();
       const target = existingList.find(p => p.id === id);
       if (target) {
-        const errors = validatePatient({ ...target, ...updatedFields });
+        const errors = validatePatient({ ...target, ...updatedFields }, id);
         if (errors.length > 0) {
           throw new Error(errors.join(' '));
         }
         if (isElectron()) {
           await invokeDb('update', 'patients', { id, data: updatedFields });
         }
+        const oldValues: Record<string, string> = {};
+        for (const key of Object.keys(updatedFields)) {
+          if (key !== 'id' && key !== 'createdAt' && (target as any)[key] !== (updatedFields as any)[key]) {
+            oldValues[key] = JSON.stringify((target as any)[key]);
+          }
+        }
         const updatedList = existingList.map(p => p.id === id ? { ...p, ...updatedFields } : p);
         setStorageItem('emr_patients', updatedList);
         if (isElectron()) electronCache.patients = updatedList;
+        for (const [field, oldVal] of Object.entries(oldValues)) {
+          await db.logChange('patient', id, field, oldVal, JSON.stringify((updatedFields as any)[field]), updatedFields);
+        }
         await db.logActivity('Patient Update', 'Updated information for patient ID: ' + id);
         emitDbChange('patients:changed');
       }
@@ -676,7 +758,7 @@ export const db = {
 
   deletePatient: async (id: string) => {
     await transaction(async () => {
-      const relatedTables = ['consultations', 'prescriptions', 'appointments', 'certificates', 'documents'];
+      const relatedTables = ['consultations', 'prescriptions', 'appointments', 'certificates', 'documents', 'referrals', 'reminders'];
       if (isElectron()) {
         for (const table of relatedTables) {
           const result = await invokeDb('deleteByPatient', table, { patientId: id });
@@ -694,12 +776,16 @@ export const db = {
       setStorageItem('emr_appointments', syncGetAppointments().filter(a => a.patientId !== id));
       setStorageItem('emr_certificates', syncGetCertificates().filter(c => c.patientId !== id));
       setStorageItem('emr_documents', syncGetDocuments().filter(d => d.patientId !== id));
+      setStorageItem('emr_referrals', syncGetReferrals().filter(r => r.patientId !== id));
+      setStorageItem('emr_reminders', syncGetReminders().filter(r => r.patientId !== id));
       if (isElectron()) {
         electronCache.consultations = syncGetConsultations().filter(c => c.patientId !== id);
         electronCache.prescriptions = syncGetPrescriptions().filter(p => p.patientId !== id);
         electronCache.appointments = syncGetAppointments().filter(a => a.patientId !== id);
         electronCache.certificates = syncGetCertificates().filter(c => c.patientId !== id);
         electronCache.documents = syncGetDocuments().filter(d => d.patientId !== id);
+        electronCache.referrals = syncGetReferrals().filter(r => r.patientId !== id);
+        electronCache.reminders = syncGetReminders().filter(r => r.patientId !== id);
       }
       await db.logActivity('Patient Deleted', 'Deleted patient record ID: ' + id);
       emitDbChange('patients:changed');
@@ -708,6 +794,8 @@ export const db = {
       emitDbChange('appointments:changed');
       emitDbChange('certificates:changed');
       emitDbChange('documents:changed');
+      emitDbChange('referrals:changed');
+      emitDbChange('reminders:changed');
     });
   },
 
@@ -761,6 +849,9 @@ export const db = {
     await transaction(async () => {
       if (updatedFields.patientId && !syncGetPatients().some(p => p.id === updatedFields.patientId)) {
         throw new Error('Selected patient does not exist.');
+      }
+      if (updatedFields.date && !/^\d{4}-\d{2}-\d{2}$/.test(updatedFields.date)) {
+        throw new Error('Invalid date format. Use YYYY-MM-DD.');
       }
       if (isElectron()) {
         await invokeDb('update', 'consultations', { id, data: updatedFields });
@@ -1084,6 +1175,413 @@ export const db = {
     });
   },
 
+  getReferrals: async (): Promise<Referral[]> => {
+    if (isElectron()) {
+      const result = await invokeDb('getReferrals', 'referrals');
+      if (result.success && result.data) {
+        electronCache.referrals = result.data as Referral[];
+        setStorageItem('emr_referrals', electronCache.referrals);
+        return electronCache.referrals;
+      }
+    }
+    return syncGetReferrals();
+  },
+
+  getReferralsByPatient: async (patientId: string): Promise<Referral[]> => {
+    if (isElectron()) {
+      const result = await invokeDb('getReferralsByPatient', 'referrals', { patientId });
+      if (result.success && result.data) {
+        return result.data as Referral[];
+      }
+    }
+    return syncGetReferrals().filter(r => r.patientId === patientId);
+  },
+
+  addReferral: async (referral: Omit<Referral, 'id' | 'createdAt'>): Promise<Referral> => {
+    return transaction(async () => {
+      const patientExists = syncGetPatients().some(p => p.id === referral.patientId);
+      if (!patientExists) {
+        throw new Error('Selected patient does not exist.');
+      }
+      const id = generateId('REF');
+      const newReferral: Referral = {
+        ...referral,
+        id,
+        createdAt: getLocalDateTime()
+      };
+      if (isElectron()) {
+        await invokeDb('insert', 'referrals', { data: newReferral });
+      }
+      const updatedList = [newReferral, ...syncGetReferrals()];
+      setStorageItem('emr_referrals', updatedList);
+      if (isElectron()) electronCache.referrals = updatedList;
+      await db.logActivity('Referral Created', 'Created referral ' + id + ' for patient ID: ' + referral.patientId);
+      emitDbChange('referrals:changed');
+      return newReferral;
+    });
+  },
+
+  updateReferral: async (id: string, updatedFields: Partial<Referral>) => {
+    await transaction(async () => {
+      if (updatedFields.patientId && !syncGetPatients().some(p => p.id === updatedFields.patientId)) {
+        throw new Error('Selected patient does not exist.');
+      }
+      if (isElectron()) {
+        await invokeDb('update', 'referrals', { id, data: updatedFields });
+      }
+      const updatedList = syncGetReferrals().map(r => r.id === id ? { ...r, ...updatedFields } : r);
+      setStorageItem('emr_referrals', updatedList);
+      if (isElectron()) electronCache.referrals = updatedList;
+      await db.logActivity('Referral Updated', 'Updated referral (' + id + ')');
+      emitDbChange('referrals:changed');
+    });
+  },
+
+  deleteReferral: async (id: string) => {
+    await transaction(async () => {
+      if (isElectron()) {
+        await invokeDb('delete', 'referrals', { id });
+      }
+      const updatedList = syncGetReferrals().filter(r => r.id !== id);
+      setStorageItem('emr_referrals', updatedList);
+      if (isElectron()) electronCache.referrals = updatedList;
+      await db.logActivity('Referral Deleted', 'Deleted referral (' + id + ')');
+      emitDbChange('referrals:changed');
+    });
+  },
+
+  renewPrescription: async (prescriptionId: string): Promise<Prescription> => {
+    const existing = syncGetPrescriptions().find(p => p.id === prescriptionId);
+    if (!existing) throw new Error('Prescription not found.');
+    return transaction(async () => {
+      const patientExists = syncGetPatients().some(p => p.id === existing.patientId);
+      if (!patientExists) {
+        throw new Error('Patient for this prescription no longer exists.');
+      }
+      const id = generateId('RX');
+      const renewed: Prescription = {
+        ...existing,
+        id,
+        date: getLocalDate(),
+        medicines: existing.medicines.map(m => ({ ...m }))
+      };
+      if (isElectron()) {
+        await invokeDb('insert', 'prescriptions', { data: renewed });
+      }
+      const updatedList = [renewed, ...syncGetPrescriptions()];
+      setStorageItem('emr_prescriptions', updatedList);
+      if (isElectron()) electronCache.prescriptions = updatedList;
+      await db.logActivity('Prescription Renewed', 'Renewed prescription ' + prescriptionId + ' as ' + id + ' for patient ID: ' + existing.patientId);
+      emitDbChange('prescriptions:changed');
+      return renewed;
+    });
+  },
+
+  logChange: async (entityType: ChangeLog['entityType'], entityId: string, field: string, oldValue: string, newValue: string, rowData?: any) => {
+    await transaction(async () => {
+      const newEntry: ChangeLog = {
+        id: generateId('CHG'),
+        entityType,
+        entityId,
+        field,
+        oldValue: String(oldValue || ''),
+        newValue: String(newValue || ''),
+        changedAt: getLocalDateTime(),
+        changedBy: 'doctor',
+        undoData: rowData ? { ...rowData } : undefined
+      };
+      const existing = syncGetChangeLogs();
+      const updated = [newEntry, ...existing];
+      setStorageItem('emr_change_logs', updated);
+      if (isElectron()) {
+        electronCache.changeLogs = updated;
+        await invokeDb('insert', 'changelog', { data: newEntry });
+      }
+      emitDbChange('logs:changed');
+    });
+  },
+
+  getChangeHistory: async (entityType?: string, entityId?: string): Promise<ChangeLog[]> => {
+    let changes = syncGetChangeLogs();
+    if (entityType) changes = changes.filter(c => c.entityType === entityType);
+    if (entityId) changes = changes.filter(c => c.entityId === entityId);
+    return changes.sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime());
+  },
+
+  undoChange: async (changeId: string): Promise<boolean> => {
+    await transaction(async () => {
+      const changeLog = syncGetChangeLogs().find(l => l.id === changeId);
+      if (!changeLog) throw new Error('Change not found');
+      const undoData = changeLog.undoData;
+      if (!undoData) throw new Error('No undo data available');
+      if (changeLog.entityType === 'patient' && changeLog.entityId) {
+        await db.updatePatient(changeLog.entityId, undoData);
+      }
+    });
+    return true;
+  },
+
+  cleanupOrphans: async (): Promise<{ consultations: number; prescriptions: number; appointments: number; certificates: number; documents: number; referrals: number; reminders: number }> => {
+    const patients = syncGetPatients();
+    const patientIds = new Set(patients.map(p => p.id));
+    
+    let cleanedConsultations = 0;
+    let cleanedPrescriptions = 0;
+    let cleanedAppointments = 0;
+    let cleanedCertificates = 0;
+    let cleanedDocuments = 0;
+    let cleanedReferrals = 0;
+    let cleanedReminders = 0;
+
+    const consultations = syncGetConsultations().filter(c => {
+      if (!patientIds.has(c.patientId)) { cleanedConsultations++; return false; }
+      return true;
+    });
+
+    const prescriptions = syncGetPrescriptions().filter(p => {
+      if (!patientIds.has(p.patientId)) { cleanedPrescriptions++; return false; }
+      return true;
+    });
+
+    const appointments = syncGetAppointments().filter(a => {
+      if (!patientIds.has(a.patientId)) { cleanedAppointments++; return false; }
+      return true;
+    });
+
+    const certificates = syncGetCertificates().filter(c => {
+      if (!patientIds.has(c.patientId)) { cleanedCertificates++; return false; }
+      return true;
+    });
+
+    const documents = syncGetDocuments().filter(d => {
+      if (!patientIds.has(d.patientId)) { cleanedDocuments++; return false; }
+      return true;
+    });
+
+    const referrals = syncGetReferrals().filter(r => {
+      if (!patientIds.has(r.patientId)) { cleanedReferrals++; return false; }
+      return true;
+    });
+
+    const reminders = syncGetReminders().filter(r => {
+      if (!patientIds.has(r.patientId)) { cleanedReminders++; return false; }
+      return true;
+    });
+
+    setStorageItem('emr_consultations', consultations);
+    setStorageItem('emr_prescriptions', prescriptions);
+    setStorageItem('emr_appointments', appointments);
+    setStorageItem('emr_certificates', certificates);
+    setStorageItem('emr_documents', documents);
+    setStorageItem('emr_referrals', referrals);
+    setStorageItem('emr_reminders', reminders);
+
+    if (isElectron()) {
+      electronCache.consultations = consultations;
+      electronCache.prescriptions = prescriptions;
+      electronCache.appointments = appointments;
+      electronCache.certificates = certificates;
+      electronCache.documents = documents;
+      electronCache.referrals = referrals;
+      electronCache.reminders = reminders;
+    }
+
+    await db.logActivity('Orphan Cleanup', `Cleaned up orphans: ${cleanedConsultations} consultations, ${cleanedPrescriptions} prescriptions, ${cleanedAppointments} appointments, ${cleanedCertificates} certificates, ${cleanedDocuments} documents, ${cleanedReferrals} referrals, ${cleanedReminders} reminders`);
+
+    return {
+      consultations: cleanedConsultations,
+      prescriptions: cleanedPrescriptions,
+      appointments: cleanedAppointments,
+      certificates: cleanedCertificates,
+      documents: cleanedDocuments,
+      referrals: cleanedReferrals,
+      reminders: cleanedReminders
+    };
+  },
+
+  getReminders: async (): Promise<Reminder[]> => {
+    if (isElectron()) {
+      const result = await invokeDb('getReminders', 'reminders');
+      if (result.success && result.data) {
+        electronCache.reminders = result.data as Reminder[];
+        setStorageItem('emr_reminders', electronCache.reminders);
+        return electronCache.reminders;
+      }
+    }
+    return syncGetReminders();
+  },
+
+  getRemindersByPatient: async (patientId: string): Promise<Reminder[]> => {
+    if (isElectron()) {
+      const result = await invokeDb('getRemindersByPatient', 'reminders', { patientId });
+      if (result.success && result.data) {
+        return result.data as Reminder[];
+      }
+    }
+    return syncGetReminders().filter(r => r.patientId === patientId);
+  },
+
+  addReminder: async (reminder: Omit<Reminder, 'id' | 'createdAt'>): Promise<Reminder> => {
+    return transaction(async () => {
+      const patientExists = syncGetPatients().some(p => p.id === reminder.patientId);
+      if (!patientExists) {
+        throw new Error('Selected patient does not exist.');
+      }
+      const id = generateId('REM');
+      const newReminder: Reminder = {
+        ...reminder,
+        id,
+        createdAt: getLocalDateTime()
+      };
+      if (isElectron()) {
+        await invokeDb('insert', 'reminders', { data: newReminder });
+      }
+      const updatedList = [newReminder, ...syncGetReminders()];
+      setStorageItem('emr_reminders', updatedList);
+      if (isElectron()) electronCache.reminders = updatedList;
+      await db.logActivity('Reminder Created', 'Created reminder ' + id + ' for patient ID: ' + reminder.patientId);
+      emitDbChange('reminders:changed');
+      return newReminder;
+    });
+  },
+
+  updateReminder: async (id: string, updatedFields: Partial<Reminder>) => {
+    await transaction(async () => {
+      if (updatedFields.patientId && !syncGetPatients().some(p => p.id === updatedFields.patientId)) {
+        throw new Error('Selected patient does not exist.');
+      }
+      if (isElectron()) {
+        await invokeDb('update', 'reminders', { id, data: updatedFields });
+      }
+      const updatedList = syncGetReminders().map(r => r.id === id ? { ...r, ...updatedFields } : r);
+      setStorageItem('emr_reminders', updatedList);
+      if (isElectron()) electronCache.reminders = updatedList;
+      await db.logActivity('Reminder Updated', 'Updated reminder (' + id + ')');
+      emitDbChange('reminders:changed');
+    });
+  },
+
+  deleteReminder: async (id: string) => {
+    await transaction(async () => {
+      if (isElectron()) {
+        await invokeDb('delete', 'reminders', { id });
+      }
+      const updatedList = syncGetReminders().filter(r => r.id !== id);
+      setStorageItem('emr_reminders', updatedList);
+      if (isElectron()) electronCache.reminders = updatedList;
+      await db.logActivity('Reminder Deleted', 'Deleted reminder (' + id + ')');
+      emitDbChange('reminders:changed');
+    });
+  },
+
+  generateReminders: async (): Promise<{ followUp: number; appointment: number; chartReview: number; refill: number }> => {
+    const today = getLocalDate();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    const thirtyDaysFromNowStr = thirtyDaysFromNow.toISOString().split('T')[0];
+
+    const existingReminders = syncGetReminders();
+    const followUps = syncGetConsultations().filter(c => c.followupDate && c.followupDate >= today && c.followupDate <= thirtyDaysFromNowStr);
+    const appointments = syncGetAppointments().filter(a => a.status === 'Scheduled' && a.date >= today && a.date <= thirtyDaysFromNowStr);
+    const oldConsultations = syncGetConsultations().filter(c => c.date < today);
+    const prescriptions = syncGetPrescriptions();
+
+    let followUpCount = 0;
+    let appointmentCount = 0;
+    let chartReviewCount = 0;
+    let refillCount = 0;
+
+    for (const c of followUps) {
+      const patientExists = syncGetPatients().some(p => p.id === c.patientId);
+      if (!patientExists) continue;
+      const existing = existingReminders.find(r => r.relatedId === c.id && r.type === 'followup');
+      if (!existing) {
+        try {
+          await db.addReminder({
+            patientId: c.patientId,
+            type: 'followup',
+            title: 'Follow-up Due',
+            message: `Follow-up scheduled for ${c.followupDate} (${c.chiefComplaint})`,
+            dueDate: c.followupDate!,
+            status: 'pending',
+            relatedId: c.id
+          });
+          followUpCount++;
+        } catch (e) {
+          console.warn('Skipping followup reminder for', c.id, e);
+        }
+      }
+    }
+
+    for (const a of appointments) {
+      const patientExists = syncGetPatients().some(p => p.id === a.patientId);
+      if (!patientExists) continue;
+      const existing = existingReminders.find(r => r.relatedId === a.id && r.type === 'appointment');
+      if (!existing) {
+        try {
+          await db.addReminder({
+            patientId: a.patientId,
+            type: 'appointment',
+            title: 'Appointment Scheduled',
+            message: `Appointment on ${a.date} at ${a.time} (${a.reason})`,
+            dueDate: a.date,
+            status: 'pending',
+            relatedId: a.id
+          });
+          appointmentCount++;
+        } catch (e) {
+          console.warn('Skipping appointment reminder for', a.id, e);
+        }
+      }
+    }
+
+    for (const c of oldConsultations) {
+      const patientExists = syncGetPatients().some(p => p.id === c.patientId);
+      if (!patientExists) continue;
+      const existing = existingReminders.find(r => r.relatedId === c.id && r.type === 'chart_review');
+      if (!existing) {
+        try {
+          await db.addReminder({
+            patientId: c.patientId,
+            type: 'chart_review',
+            title: 'Chart Review',
+            message: `Review consultation from ${c.date}: ${c.chiefComplaint}`,
+            dueDate: today,
+            status: 'pending',
+            relatedId: c.id
+          });
+          chartReviewCount++;
+        } catch (e) {
+          console.warn('Skipping chart review reminder for', c.id, e);
+        }
+      }
+    }
+
+    for (const p of prescriptions) {
+      const patientExists = syncGetPatients().some(p2 => p2.id === p.patientId);
+      if (!patientExists) continue;
+      const existing = existingReminders.find(r => r.relatedId === p.id && r.type === 'prescription_refill');
+      if (!existing) {
+        try {
+          await db.addReminder({
+            patientId: p.patientId,
+            type: 'prescription_refill',
+            title: 'Prescription Refill',
+            message: `Prescription ${p.id} may need refill review`,
+            dueDate: today,
+            status: 'pending',
+            relatedId: p.id
+          });
+          refillCount++;
+        } catch (e) {
+          console.warn('Skipping refill reminder for', p.id, e);
+        }
+      }
+    }
+
+    return { followUp: followUpCount, appointment: appointmentCount, chartReview: chartReviewCount, refill: refillCount };
+  },
+
   getActivityLogs: async (): Promise<ActivityLog[]> => {
     if (isElectron()) {
       const result = await invokeDb('getActivityLogs', 'logs');
@@ -1158,6 +1656,8 @@ export const db = {
       appointments: syncGetAppointments(),
       certificates: syncGetCertificates(),
       documents: syncGetDocuments(),
+      referrals: syncGetReferrals(),
+      reminders: syncGetReminders(),
       logs: syncGetActivityLogs()
     };
     await db.logActivity('Backup Created', 'Manual database backup exported.');
@@ -1179,6 +1679,8 @@ export const db = {
         ['appointments', 'appointments'],
         ['certificates', 'certificates'],
         ['documents', 'documents'],
+        ['referrals', 'referrals'],
+        ['reminders', 'reminders'],
         ['logs', 'logs']
       ];
       for (const [key, label] of arraysToValidate) {
@@ -1199,8 +1701,10 @@ export const db = {
         setStorageItem('emr_prescriptions', parsed.prescriptions || []);
         setStorageItem('emr_appointments', parsed.appointments || []);
         setStorageItem('emr_certificates', parsed.certificates || []);
-        setStorageItem('emr_documents', parsed.documents || []);
-        setStorageItem('emr_logs', parsed.logs || []);
+         setStorageItem('emr_documents', parsed.documents || []);
+         setStorageItem('emr_referrals', parsed.referrals || []);
+         setStorageItem('emr_reminders', parsed.reminders || []);
+         setStorageItem('emr_logs', parsed.logs || []);
       }
       emitDbChange('patients:changed');
       emitDbChange('consultations:changed');
@@ -1208,6 +1712,8 @@ export const db = {
       emitDbChange('appointments:changed');
       emitDbChange('certificates:changed');
       emitDbChange('documents:changed');
+      emitDbChange('referrals:changed');
+      emitDbChange('reminders:changed');
       emitDbChange('logs:changed');
       emitDbChange('doctor:changed');
       await db.logActivity('Restore Database', 'Database state successfully restored from backup.');
