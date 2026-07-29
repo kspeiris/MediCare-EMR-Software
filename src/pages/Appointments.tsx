@@ -1,4 +1,4 @@
-import { Calendar as CalendarIcon, Clock, SlidersHorizontal, Edit2, Trash2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, SlidersHorizontal, Edit2, Trash2, Plus, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getLocalDate } from '@/lib/dates';
 import { useState, useMemo, useEffect } from 'react';
@@ -6,12 +6,15 @@ import { Modal } from '@/components/ui/Modal';
 import { db, Appointment, Patient } from '@/services/db';
 import { Badge } from '@/components/ui/Badge';
 import { onDbChange } from '@/services/db';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { InlineBanner } from '@/components/ui/InlineBanner';
 
 export function Appointments() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingApt, setEditingApt] = useState<Appointment | null>(null);
   const [viewMode, setViewMode] = useState('Month');
+  const [formError, setFormError] = useState('');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -105,6 +108,7 @@ export function Appointments() {
 
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (!selectedPatientId || !date || !time) return;
 
     try {
@@ -121,7 +125,7 @@ export function Appointments() {
       setNotes('');
       setIsModalOpen(false);
     } catch (err: any) {
-      alert(err.message || 'Failed to schedule appointment. Please try again.');
+      setFormError(err.message || 'Failed to schedule appointment. Please try again.');
     }
   };
 
@@ -189,8 +193,13 @@ export function Appointments() {
         </button>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Schedule New Patient Visit">
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setFormError(''); }} title="Schedule New Patient Visit">
         <form className="space-y-4" onSubmit={handleSchedule}>
+          {formError && (
+            <InlineBanner variant="error" title="Error" onDismiss={() => setFormError('')}>
+              {formError}
+            </InlineBanner>
+          )}
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Patient</label>
             <select 
@@ -354,7 +363,19 @@ export function Appointments() {
                   </div>
                 ))
               ) : (
-                <span className="text-slate-400 text-xs block py-4 text-center">No appointments found.</span>
+                <EmptyState
+                  icon={<CalendarDays size={36} />}
+                  title="No appointments found"
+                  description="Schedule your first appointment to start managing patient visits."
+                  action={
+                    <button
+                      onClick={() => setIsModalOpen(true)}
+                      className="bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded text-[12px] font-semibold transition-colors inline-flex items-center gap-1"
+                    >
+                      <Plus size={14} /> Schedule Appointment
+                    </button>
+                  }
+                />
               )}
             </div>
           </div>

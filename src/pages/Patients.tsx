@@ -1,10 +1,12 @@
 import { Table, Th, Td } from '@/components/ui/Table';
 import { Link } from 'react-router-dom';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { db, Patient } from '@/services/db';
-import { Edit2, Trash2, Users, Eye } from 'lucide-react';
+import { Edit2, Trash2, Users, Eye, Undo2, AlertTriangle } from 'lucide-react';
 import { onDbChange } from '@/services/db';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { InlineBanner } from '@/components/ui/InlineBanner';
 
 export function Patients() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,6 +39,9 @@ export function Patients() {
   const [weight, setWeight] = useState('70');
   const [vaccinationHistory, setVaccinationHistory] = useState('');
   const [medicalNotes, setMedicalNotes] = useState('');
+  const [duplicateWarning, setDuplicateWarning] = useState<string[]>([]);
+  const [undoStack, setUndoStack] = useState<Array<{ patientId: string; patientData: Patient }>>([]);
+  const [formError, setFormError] = useState<string>('');
 
   const loadPatients = async () => {
     const data = await db.getPatients();
@@ -50,6 +55,19 @@ export function Patients() {
     });
     return unsub;
   }, []);
+
+  const checkDuplicates = useCallback((field: 'nic' | 'phone', value: string, currentId?: string) => {
+    if (!value) { setDuplicateWarning([]); return; }
+    const dupes = patients.filter(p => {
+      if (p.id === currentId) return false;
+      return field === 'nic' ? p.nic === value : p.phone === value;
+    });
+    if (dupes.length > 0) {
+      setDuplicateWarning([`Another patient already has this ${field === 'nic' ? 'NIC' : 'phone'}: ${dupes[0].firstName} ${dupes[0].lastName} (${dupes[0].id})`]);
+    } else {
+      setDuplicateWarning([]);
+    }
+  }, [patients]);
 
   const calculateAge = (dobString: string): number => {
     if (!dobString) return 0;
@@ -122,13 +140,30 @@ export function Patients() {
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this patient record? This cannot be undone.")) {
+      const existing = patients.find(p => p.id === id);
+      if (existing) {
+        setUndoStack(prev => [...prev, { patientId: id, patientData: { ...existing } }].slice(-20));
+      }
       await db.deletePatient(id);
       await loadPatients();
     }
   };
 
+  const handleUndo = async () => {
+    const last = undoStack[undoStack.length - 1];
+    if (!last) return;
+    try {
+      await db.updatePatient(last.patientId, last.patientData);
+      setUndoStack(prev => prev.slice(0, -1));
+      await loadPatients();
+    } catch (e) {
+      console.error('Undo failed:', e);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     
     const allergyList = allergies.split(',').map(s => s.trim()).filter(Boolean);
     const weightNum = parseFloat(weight) || 0;
@@ -162,14 +197,23 @@ export function Patients() {
       medicalNotes,
     };
 
-    if (editPatientId) {
-      await db.updatePatient(editPatientId, patientData);
-    } else {
-      await db.addPatient(patientData);
-    }
+    try {
+      if (editPatientId) {
+        const existing = patients.find(p => p.id === editPatientId);
+        if (existing) {
+          setUndoStack(prev => [...prev, { patientId: editPatientId, patientData: { ...existing } }].slice(-20));
+        }
+        await db.updatePatient(editPatientId, patientData);
+      } else {
+        await db.addPatient(patientData);
+      }
 
-    await loadPatients();
-    setIsModalOpen(false);
+      await loadPatients();
+      setIsModalOpen(false);
+      setDuplicateWarning([]);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to save patient. Please check the form and try again.');
+    }
   };
 
   const filteredPatients = useMemo(() => {
@@ -201,16 +245,33 @@ export function Patients() {
           <h2 className="text-[16px] font-semibold text-slate-900 dark:text-white">Patient Records</h2>
           <p className="text-[12px] text-slate-500 mt-0.5 font-medium">Create, edit and manage clinical patient details.</p>
         </div>
-        <button 
-          onClick={handleOpenAddModal}
-          className="bg-slate-900 dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-700 text-white px-3 py-1.5 rounded text-[12px] font-semibold transition-colors"
-        >
-          + New Patient
-        </button>
+        <div className="flex gap-2">
+          {undoStack.length > 0 && (
+            <button onClick={handleUndo} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 px-3 py-1.5 rounded text-[12px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1 font-semibold">
+              <Undo2 size={14} /> Undo ({undoStack.length})
+            </button>
+          )}
+          <button 
+            onClick={handleOpenAddModal}
+            className="bg-slate-900 dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-700 text-white px-3 py-1.5 rounded text-[12px] font-semibold transition-colors"
+          >
+            + New Patient
+          </button>
+        </div>
       </div>
       
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editPatientId ? "Edit Patient Details" : "Add New Patient"} className="max-w-2xl">
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setFormError(''); }} title={editPatientId ? "Edit Patient Details" : "Add New Patient"} className="max-w-2xl">
         <form className="space-y-5" onSubmit={handleSubmit}>
+          {formError && (
+            <InlineBanner variant="error" title="Validation Error" onDismiss={() => setFormError('')}>
+              {formError}
+            </InlineBanner>
+          )}
+          {duplicateWarning.length > 0 && (
+            <InlineBanner variant="warning" title="Duplicate Warning">
+              {duplicateWarning.join(' ')}
+            </InlineBanner>
+          )}
           <div>
             <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Personal Information</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -239,7 +300,8 @@ export function Patients() {
             <div className="grid grid-cols-2 gap-4 mt-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">NIC / Passport</label>
-                <input value={nic} onChange={(e) => setNic(e.target.value)} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+                <input value={nic} onChange={(e) => { setNic(e.target.value); checkDuplicates('nic', e.target.value, editPatientId || undefined); }} type="text" className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+                {duplicateWarning.some(w => w.includes('NIC')) && <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> {duplicateWarning.find(w => w.includes('NIC'))}</p>}
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Blood Group</label>
@@ -253,7 +315,8 @@ export function Patients() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Phone Number</label>
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+                <input value={phone} onChange={(e) => { setPhone(e.target.value); checkDuplicates('phone', e.target.value, editPatientId || undefined); }} type="tel" required className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[13px] outline-none" />
+                {duplicateWarning.some(w => w.includes('phone')) && <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1"><AlertTriangle size={10} /> {duplicateWarning.find(w => w.includes('phone'))}</p>}
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Email</label>
@@ -389,7 +452,18 @@ export function Patients() {
               paginatedPatients.map((patient) => (
                 <tr key={patient.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                   <Td className="font-semibold text-slate-700 dark:text-slate-300">#{patient.id}</Td>
-                  <Td>{patient.firstName} {patient.lastName}</Td>
+                  <Td>
+                    <div className="flex items-center gap-2">
+                      {patient.profilePic ? (
+                        <img src={patient.profilePic} alt="" className="w-7 h-7 rounded-full object-cover border border-slate-200 dark:border-slate-700" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-sky-100 dark:bg-sky-950 flex items-center justify-center text-sky-700 dark:text-sky-400 text-[10px] font-bold">
+                          {patient.firstName[0]}{patient.lastName[0]}
+                        </div>
+                      )}
+                      <span>{patient.firstName} {patient.lastName}</span>
+                    </div>
+                  </Td>
                   <Td>{patient.nic || 'N/A'}</Td>
                   <Td>{calculateAge(patient.dob)} / {patient.gender}</Td>
                   <Td>{patient.phone}</Td>
@@ -406,12 +480,20 @@ export function Patients() {
               ))
             ) : (
               <tr>
-                <Td colSpan={6} className="text-center py-12">
-                  <div className="flex flex-col items-center gap-2">
-                    <Users size={32} className="text-slate-300 dark:text-slate-600 mb-1" />
-                    <p className="text-[13px] text-slate-500 font-medium">No patient records found</p>
-                    <p className="text-[11px] text-slate-400">Try adjusting your search or add a new patient to get started.</p>
-                  </div>
+                <Td colSpan={6}>
+                  <EmptyState
+                    icon={<Users size={40} />}
+                    title="No patient records found"
+                    description="Try adjusting your search or register a new patient to get started."
+                    action={
+                      <button
+                        onClick={handleOpenAddModal}
+                        className="bg-slate-900 dark:bg-sky-600 hover:bg-slate-800 dark:hover:bg-sky-700 text-white px-3 py-1.5 rounded text-[12px] font-semibold transition-colors"
+                      >
+                        + New Patient
+                      </button>
+                    }
+                  />
                 </Td>
               </tr>
             )}
