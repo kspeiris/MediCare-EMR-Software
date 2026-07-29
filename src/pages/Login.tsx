@@ -31,7 +31,7 @@ export function Login({ onLogin }: LoginProps) {
     try {
       const result = await db.authenticateUser(trimmedUsername, trimmedPassword);
       if (result.success && result.user) {
-        onLogin({ username: result.user.username, role: result.user.role });
+        onLogin({ username: result.user.username, role: 'doctor' });
       } else {
         setError(result.error || 'Invalid username or password. Please try again.');
       }

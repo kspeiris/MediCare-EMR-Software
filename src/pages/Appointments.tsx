@@ -15,7 +15,7 @@ export function Appointments() {
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [doc, setDoc] = useState<{ name: string; regNumber: string; specialization: string; clinicName: string; clinicAddress: string; phone: string; email: string; role?: string }>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'admin' });
+  const [doc, setDoc] = useState<{ name: string; regNumber: string; specialization: string; clinicName: string; clinicAddress: string; phone: string; email: string }>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '' });
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const loadData = async () => {

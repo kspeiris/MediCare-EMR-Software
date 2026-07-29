@@ -3,29 +3,26 @@ import { cn } from '@/lib/utils';
 import { NavLink } from 'react-router-dom';
 
 const navItems = [
-  { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: ['admin', 'doctor', 'receptionist'] },
-  { name: 'Patients', path: '/patients', icon: Users, roles: ['admin', 'doctor', 'receptionist'] },
-  { name: 'Consultations', path: '/consultations', icon: FileText, roles: ['admin', 'doctor'] },
-  { name: 'Prescriptions', path: '/prescriptions', icon: ClipboardList, roles: ['admin', 'doctor'] },
-  { name: 'Certificates', path: '/certificates', icon: FileBadge, roles: ['admin', 'doctor'] },
-  { name: 'Appointments', path: '/appointments', icon: Calendar, roles: ['admin', 'doctor', 'receptionist'] },
-  { name: 'Reports', path: '/reports', icon: BarChart, roles: ['admin', 'doctor'] },
-  { name: 'Backup', path: '/backup', icon: HardDrive, roles: ['admin'] },
-  { name: 'Settings', path: '/settings', icon: Settings, roles: ['admin', 'doctor', 'receptionist'] },
-  { name: 'Activity Log', path: '/logs', icon: ShieldAlert, roles: ['admin'] },
-  { name: 'Help', path: '/help', icon: HelpCircle, roles: ['admin', 'doctor', 'receptionist'] },
+  { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { name: 'Patients', path: '/patients', icon: Users },
+  { name: 'Consultations', path: '/consultations', icon: FileText },
+  { name: 'Prescriptions', path: '/prescriptions', icon: ClipboardList },
+  { name: 'Certificates', path: '/certificates', icon: FileBadge },
+  { name: 'Appointments', path: '/appointments', icon: Calendar },
+  { name: 'Reports', path: '/reports', icon: BarChart },
+  { name: 'Backup', path: '/backup', icon: HardDrive },
+  { name: 'Settings', path: '/settings', icon: Settings },
+  { name: 'Activity Log', path: '/logs', icon: ShieldAlert },
+  { name: 'Help', path: '/help', icon: HelpCircle },
 ];
 
 interface SidebarProps {
   onLogout: () => void;
   isOpen?: boolean;
   onClose?: () => void;
-  currentRole?: string;
 }
 
-export function Sidebar({ onLogout, isOpen = false, onClose, currentRole = 'admin' }: SidebarProps) {
-  const visibleItems = navItems.filter(item => item.roles.includes(currentRole));
-
+export function Sidebar({ onLogout, isOpen = false, onClose }: SidebarProps) {
   return (
     <>
       {/* Mobile overlay */}
@@ -52,7 +49,7 @@ export function Sidebar({ onLogout, isOpen = false, onClose, currentRole = 'admi
         </div>
 
       <div className="flex-1 overflow-y-auto space-y-0">
-        {visibleItems.map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}

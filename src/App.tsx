@@ -18,33 +18,6 @@ import { ActivityLog } from '@/pages/ActivityLog';
 import { useState, useEffect, useCallback } from 'react';
 import { db, initDatabase, setStorageItem, removeStorageItem } from '@/services/db';
 
-const ROUTE_PERMISSIONS: Record<string, string[]> = {
-  '/': ['admin', 'doctor', 'receptionist'],
-  '/patients': ['admin', 'doctor', 'receptionist'],
-  '/patients/:id': ['admin', 'doctor', 'receptionist'],
-  '/consultations': ['admin', 'doctor'],
-  '/prescriptions': ['admin', 'doctor'],
-  '/certificates': ['admin', 'doctor'],
-  '/appointments': ['admin', 'doctor', 'receptionist'],
-  '/reports': ['admin', 'doctor'],
-  '/backup': ['admin'],
-  '/settings': ['admin', 'doctor', 'receptionist'],
-  '/logs': ['admin'],
-  '/help': ['admin', 'doctor', 'receptionist']
-};
-
-function RequireRole({ children, allowedRoles, currentRole }: { children: React.ReactNode; allowedRoles: string[]; currentRole?: string }) {
-  if (!currentRole || !allowedRoles.includes(currentRole)) {
-    return (
-      <div className="p-8 text-center">
-        <h2 className="text-lg font-bold text-red-500">Access Denied</h2>
-        <p className="text-sm text-slate-500 mt-2">You do not have permission to view this page.</p>
-      </div>
-    );
-  }
-  return <>{children}</>;
-}
-
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
@@ -93,7 +66,7 @@ export default function App() {
 
   const handleLogin = (user: { username: string; role: string }) => {
     setIsAuthenticated(true);
-    setCurrentUser({ ...user, id: 'current-session' });
+    setCurrentUser({ ...user, role: 'doctor', id: 'current-session' });
     setStorageItem('emr_authenticated', 'true');
     db.logActivity('Login', `User ${user.username} logged in successfully.`);
   };
@@ -117,7 +90,7 @@ export default function App() {
   return (
     <HashRouter>
       <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans transition-colors duration-200">
-        <Sidebar onLogout={handleLogout} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} currentRole={currentUser?.role} />
+        <Sidebar onLogout={handleLogout} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 md:ml-[200px] flex flex-col h-screen overflow-hidden">
           <TopNavbar darkMode={darkMode} setDarkMode={setDarkMode} onLogout={handleLogout} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
           <main className="flex-1 overflow-y-auto">
@@ -125,15 +98,15 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/patients" element={<Patients />} />
               <Route path="/patients/:id" element={<PatientProfile />} />
-              <Route path="/consultations" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/consultations']} currentRole={currentUser?.role}><Consultations /></RequireRole>} />
-              <Route path="/prescriptions" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/prescriptions']} currentRole={currentUser?.role}><Prescriptions /></RequireRole>} />
-              <Route path="/certificates" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/certificates']} currentRole={currentUser?.role}><Certificates /></RequireRole>} />
-              <Route path="/appointments" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/appointments']} currentRole={currentUser?.role}><Appointments /></RequireRole>} />
-              <Route path="/reports" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/reports']} currentRole={currentUser?.role}><Reports /></RequireRole>} />
-              <Route path="/backup" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/backup']} currentRole={currentUser?.role}><Backup /></RequireRole>} />
-              <Route path="/settings" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/settings']} currentRole={currentUser?.role}><Settings /></RequireRole>} />
-              <Route path="/logs" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/logs']} currentRole={currentUser?.role}><ActivityLog /></RequireRole>} />
-              <Route path="/help" element={<RequireRole allowedRoles={ROUTE_PERMISSIONS['/help']} currentRole={currentUser?.role}><Help /></RequireRole>} />
+              <Route path="/consultations" element={<Consultations />} />
+              <Route path="/prescriptions" element={<Prescriptions />} />
+              <Route path="/certificates" element={<Certificates />} />
+              <Route path="/appointments" element={<Appointments />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/backup" element={<Backup />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/logs" element={<ActivityLog />} />
+              <Route path="/help" element={<Help />} />
             </Routes>
           </main>
         </div>

@@ -19,7 +19,7 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout, onToggleSidebar }: 
   const [searchQuery, setSearchQuery] = useState('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [doc, setDoc] = useState<{ name: string; regNumber: string; specialization: string; clinicName: string; clinicAddress: string; phone: string; email: string; role?: string }>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'admin' });
+  const [doc, setDoc] = useState<{ name: string; regNumber: string; specialization: string; clinicName: string; clinicAddress: string; phone: string; email: string }>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '' });
   const searchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -208,9 +208,6 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout, onToggleSidebar }: 
         <div className="flex items-center gap-3 border-l border-slate-200 dark:border-slate-800 pl-4">
           <div className="text-right">
             <div className="flex items-center gap-1.5 justify-end">
-              <span className="text-[9px] bg-sky-50 dark:bg-sky-950 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                {doc.role || 'admin'}
-              </span>
               <p className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{doc.name}</p>
             </div>
             <p className="text-[9px] text-slate-400 uppercase font-semibold">{doc.specialization}</p>

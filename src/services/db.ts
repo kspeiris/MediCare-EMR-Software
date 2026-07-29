@@ -136,7 +136,7 @@ const INITIAL_DOCTOR: DoctorProfile = {
   clinicAddress: '123 Health Ave, Suite 100, Medical City, TX 75001',
   phone: '(555) 123-4567',
   email: 'contact@medicareclinic.com',
-  role: 'admin'
+  role: 'doctor'
 };
 
 const INITIAL_PATIENTS: Patient[] = [
@@ -576,24 +576,22 @@ export const db = {
     const authenticated = localStorage.getItem('emr_authenticated') === 'true';
     if (!authenticated) return null;
     const username = getStorageItem('emr_username', 'doctor');
-    const doctor = getDoctorProfileSync();
     return {
       id: 'current-session',
       username,
-      role: doctor.role || 'admin'
+      role: 'doctor'
     };
   },
 
   authenticateUser: async (username: string, pass: string): Promise<{ success: boolean; user?: { username: string; role: string }; error?: string }> => {
     const storedUsername = getStorageItem('emr_username', 'doctor');
     const storedPass = (await getSecureItem('emr_password')) || 'secure123';
-    const doctor = getDoctorProfileSync();
     if (username === storedUsername && pass === storedPass) {
       return {
         success: true,
         user: {
           username: storedUsername,
-          role: doctor.role || 'admin'
+          role: 'doctor'
         }
       };
     }
