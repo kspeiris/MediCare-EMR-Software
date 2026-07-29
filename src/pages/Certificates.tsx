@@ -2,12 +2,13 @@ import { useState, useMemo, useEffect } from 'react';
 import { getLocalDate } from '@/lib/dates';
 import { Table, Th, Td } from '@/components/ui/Table';
 import { Modal } from '@/components/ui/Modal';
-import { Search, PlusCircle, Printer, Edit2, Trash2, Download } from 'lucide-react';
+import { Search, PlusCircle, Printer, Edit2, Trash2, Download, FileBadge } from 'lucide-react';
 import { db, MedicalCertificate, Patient } from '@/services/db';
 import { Link } from 'react-router-dom';
 import { CertificatePrintTemplate } from '@/components/print-templates/CertificatePrintTemplate';
 import { generatePDF } from '@/components/print-templates/pdfExport';
 import { onDbChange } from '@/services/db';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export function Certificates() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -328,8 +329,20 @@ export function Certificates() {
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-slate-500">
-                  No medical certificates found.
+                <td colSpan={6}>
+                  <EmptyState
+                    icon={<FileBadge size={36} />}
+                    title="No medical certificates found"
+                    description="Issue medical certificates for patients who need sick leave or fitness clearance."
+                    action={
+                      <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded text-[12px] font-semibold transition-colors inline-flex items-center gap-1"
+                      >
+                        <PlusCircle size={14} /> Issue Certificate
+                      </button>
+                    }
+                  />
                 </td>
               </tr>
             )}

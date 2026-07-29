@@ -3,12 +3,14 @@ import { Badge } from '@/components/ui/Badge';
 import { useState, useMemo, useEffect } from 'react';
 import { getLocalDate } from '@/lib/dates';
 import { Modal } from '@/components/ui/Modal';
-import { Search, PlusCircle, Edit2, Trash2, Download, Printer, Eye } from 'lucide-react';
+import { Search, PlusCircle, Edit2, Trash2, Download, Printer, Eye, ClipboardCheck, UserRoundPlus, CalendarPlus, FileText } from 'lucide-react';
 import { db, Consultation } from '@/services/db';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ConsultationPrintTemplate } from '@/components/print-templates/ConsultationPrintTemplate';
 import { generatePDF } from '@/components/print-templates/pdfExport';
 import { onDbChange } from '@/services/db';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { InlineBanner } from '@/components/ui/InlineBanner';
 
 export function Consultations() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,9 +20,20 @@ export function Consultations() {
   const [editingVisit, setEditingVisit] = useState<Consultation | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [vitalsError, setVitalsError] = useState('');
+  const [formError, setFormError] = useState('');
   const [consultations, setConsultations] = useState<Consultation[]>(() => db.getConsultationsSync());
   const [patients, setPatients] = useState(() => db.getPatientsSync());
   const [doc, setDoc] = useState(() => db.getDoctorProfileSync());
+  const [outcome, setOutcome] = useState('');
+  const [outcomeNotes, setOutcomeNotes] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (selectedVisit) {
+      setOutcome(selectedVisit.outcome || '');
+      setOutcomeNotes(selectedVisit.outcomeNotes || '');
+    }
+  }, [selectedVisit]);
 
   const loadData = () => {
     db.getConsultations().then(setConsultations);
@@ -60,6 +73,9 @@ export function Consultations() {
     diagnosis: '',
     treatmentPlan: '',
     clinicalNotes: '',
+    followupDate: '',
+    outcome: '',
+    outcomeNotes: '',
     bp: '120/80',
     pulse: '72',
     temp: '98.6',
@@ -74,6 +90,9 @@ export function Consultations() {
     diagnosis: '',
     treatmentPlan: '',
     clinicalNotes: '',
+    followupDate: '',
+    outcome: '',
+    outcomeNotes: '',
     bp: '120/80',
     pulse: '72',
     temp: '98.6',
@@ -104,6 +123,7 @@ export function Consultations() {
 
   const handleCreateConsultation = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (!createForm.patientId || !createForm.chiefComplaint || !createForm.diagnosis) return;
 
     const vitalsErr = validateVitals(createForm.bp, createForm.pulse, createForm.temp, createForm.o2);
@@ -115,45 +135,55 @@ export function Consultations() {
     
     const patient = patients.find(p => p.id === createForm.patientId);
     
-    await db.addConsultation({
-      patientId: createForm.patientId,
-      date: getLocalDate(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      chiefComplaint: createForm.chiefComplaint,
-      historyOfPresentIllness: createForm.historyOfPresentIllness,
-      physicalExamination: createForm.physicalExamination,
-      diagnosis: createForm.diagnosis,
-      treatmentPlan: createForm.treatmentPlan,
-      clinicalNotes: createForm.clinicalNotes,
-      vitals: {
-        height: patient?.height || 170,
-        weight: patient?.weight || 70,
-        bmi: patient?.bmi || 23.5,
-        bloodPressure: createForm.bp,
-        pulseRate: parseInt(createForm.pulse) || 72,
-        respiratoryRate: 16,
-        temperature: parseFloat(createForm.temp) || 98.6,
-        oxygenSaturation: parseInt(createForm.o2) || 98,
-        bloodSugar: 90
-      }
-    });
+    try {
+      await db.addConsultation({
+        patientId: createForm.patientId,
+        date: getLocalDate(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        chiefComplaint: createForm.chiefComplaint,
+        historyOfPresentIllness: createForm.historyOfPresentIllness,
+        physicalExamination: createForm.physicalExamination,
+        diagnosis: createForm.diagnosis,
+        treatmentPlan: createForm.treatmentPlan,
+        clinicalNotes: createForm.clinicalNotes,
+        followupDate: createForm.followupDate || undefined,
+        outcome: createForm.outcome || undefined,
+        outcomeNotes: createForm.outcomeNotes || undefined,
+        vitals: {
+          height: patient?.height || 170,
+          weight: patient?.weight || 70,
+          bmi: patient?.bmi || 23.5,
+          bloodPressure: createForm.bp,
+          pulseRate: parseInt(createForm.pulse) || 72,
+          respiratoryRate: 16,
+          temperature: parseFloat(createForm.temp) || 98.6,
+          oxygenSaturation: parseInt(createForm.o2) || 98,
+          bloodSugar: 90
+        }
+      });
 
-    setConsultations(db.getConsultationsSync());
-    
-    setCreateForm({
-      patientId: '',
-      chiefComplaint: '',
-      historyOfPresentIllness: '',
-      physicalExamination: '',
-      diagnosis: '',
-      treatmentPlan: '',
-      clinicalNotes: '',
-      bp: '120/80',
-      pulse: '72',
-      temp: '98.6',
-      o2: '98'
-    });
-    setIsCreateModalOpen(false);
+      setConsultations(db.getConsultationsSync());
+
+      setCreateForm({
+        patientId: '',
+        chiefComplaint: '',
+        historyOfPresentIllness: '',
+        physicalExamination: '',
+        diagnosis: '',
+        treatmentPlan: '',
+        clinicalNotes: '',
+        followupDate: '',
+        outcome: '',
+        outcomeNotes: '',
+        bp: '120/80',
+        pulse: '72',
+        temp: '98.6',
+        o2: '98'
+      });
+      setIsCreateModalOpen(false);
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to create consultation. Please try again.');
+    }
   };
 
   const handleEditClick = (visit: Consultation) => {
@@ -166,6 +196,9 @@ export function Consultations() {
       diagnosis: visit.diagnosis,
       treatmentPlan: visit.treatmentPlan || '',
       clinicalNotes: visit.clinicalNotes || '',
+      followupDate: visit.followupDate || '',
+      outcome: visit.outcome || '',
+      outcomeNotes: visit.outcomeNotes || '',
       bp: visit.vitals?.bloodPressure || '120/80',
       pulse: String(visit.vitals?.pulseRate || 72),
       temp: String(visit.vitals?.temperature || 98.6),
@@ -195,6 +228,9 @@ export function Consultations() {
       diagnosis: editForm.diagnosis,
       treatmentPlan: editForm.treatmentPlan,
       clinicalNotes: editForm.clinicalNotes,
+      followupDate: editForm.followupDate || undefined,
+      outcome: editForm.outcome || undefined,
+      outcomeNotes: editForm.outcomeNotes || undefined,
       vitals: {
         height: patient?.height || 170,
         weight: patient?.weight || 70,
@@ -255,8 +291,13 @@ export function Consultations() {
         </button>
       </div>
 
-      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="New Consultation Record">
+      <Modal isOpen={isCreateModalOpen} onClose={() => { setIsCreateModalOpen(false); setFormError(''); }} title="New Consultation Record">
         <form onSubmit={handleCreateConsultation} className="space-y-4">
+          {(formError || vitalsError) && (
+            <InlineBanner variant="error" title="Validation Error" onDismiss={() => { setFormError(''); setVitalsError(''); }}>
+              {formError || vitalsError}
+            </InlineBanner>
+          )}
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Patient</label>
             <select 
@@ -333,13 +374,49 @@ export function Consultations() {
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Treatment / Advice Plan</label>
-            <textarea 
+            <textarea
               value={createForm.treatmentPlan}
               onChange={(e) => setCreateForm({...createForm, treatmentPlan: e.target.value})}
-              rows={3} 
-              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none" 
+              rows={3}
+              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none"
               placeholder="Treatment directions and follow-up plan..."
             ></textarea>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Follow-up Date</label>
+              <input
+                value={createForm.followupDate}
+                onChange={(e) => setCreateForm({...createForm, followupDate: e.target.value})}
+                type="date"
+                className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Outcome</label>
+              <select
+                value={createForm.outcome}
+                onChange={(e) => setCreateForm({...createForm, outcome: e.target.value})}
+                className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none"
+              >
+                <option value="">Select Outcome</option>
+                <option value="Resolved">Resolved</option>
+                <option value="Improved">Improved</option>
+                <option value="Ongoing">Ongoing</option>
+                <option value="Referred">Referred</option>
+                <option value="Lost Follow-up">Lost Follow-up</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Outcome Notes</label>
+            <input
+              value={createForm.outcomeNotes}
+              onChange={(e) => setCreateForm({...createForm, outcomeNotes: e.target.value})}
+              type="text"
+              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none"
+              placeholder="Patient response, complications..."
+            />
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Clinical Notes</label>
@@ -376,8 +453,8 @@ export function Consultations() {
                 <Download size={14} />
                 {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
               </button>
-              <button 
-                onClick={handlePrintAction} 
+              <button
+                onClick={handlePrintAction}
                 className="bg-slate-900 dark:bg-sky-600 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-slate-800 dark:hover:bg-sky-700 flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Printer size={14} /> Print
@@ -392,6 +469,61 @@ export function Consultations() {
                 />
               </div>
             </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4 no-print">
+              <h3 className="text-[13px] font-semibold text-slate-900 dark:text-white mb-3">Treatment Outcome & Follow-up</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Outcome</label>
+                  <select
+                    value={outcome}
+                    onChange={(e) => setOutcome(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[12px] outline-none"
+                  >
+                    <option value="">Select Outcome</option>
+                    <option value="Resolved">Resolved</option>
+                    <option value="Improved">Improved</option>
+                    <option value="Ongoing">Ongoing</option>
+                    <option value="Referred">Referred</option>
+                    <option value="Lost Follow-up">Lost Follow-up</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Outcome Notes</label>
+                  <input
+                    value={outcomeNotes}
+                    onChange={(e) => setOutcomeNotes(e.target.value)}
+                    type="text"
+                    className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-[12px] outline-none"
+                    placeholder="Patient response, complications, notes..."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  onClick={() => {
+                    db.updateConsultation(selectedVisit.id, { outcome, outcomeNotes });
+                    setSelectedVisit({ ...selectedVisit, outcome, outcomeNotes });
+                  }}
+                  className="bg-emerald-500 text-white px-3 py-1.5 rounded text-[11px] hover:bg-emerald-600 font-semibold flex items-center gap-1"
+                >
+                  <ClipboardCheck size={13} /> Save Outcome
+                </button>
+                <button
+                  onClick={() => navigate('/appointments', { state: { patientId: selectedVisit.patientId, consultationId: selectedVisit.id } })}
+                  className="bg-sky-500 text-white px-3 py-1.5 rounded text-[11px] hover:bg-sky-600 font-semibold flex items-center gap-1"
+                >
+                  <CalendarPlus size={13} /> Follow-up
+                </button>
+                <button
+                  onClick={() => navigate('/referrals', { state: { patientId: selectedVisit.patientId, consultationId: selectedVisit.id } })}
+                  className="bg-indigo-500 text-white px-3 py-1.5 rounded text-[11px] hover:bg-indigo-600 font-semibold flex items-center gap-1"
+                >
+                  <UserRoundPlus size={13} /> Refer
+                </button>
+              </div>
+            </div>
+
             <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800 no-print">
               <button onClick={() => handleDelete(selectedVisit.id)} className="px-4 py-2 text-[12px] font-semibold text-red-600 hover:text-red-700 border border-red-200 rounded hover:bg-red-50 flex items-center gap-1">
                 <Trash2 size={14} /> Delete
@@ -485,13 +617,49 @@ export function Consultations() {
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Treatment / Advice Plan</label>
-            <textarea 
+            <textarea
               value={editForm.treatmentPlan}
               onChange={(e) => setEditForm({...editForm, treatmentPlan: e.target.value})}
-              rows={3} 
-              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none" 
+              rows={3}
+              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none"
               placeholder="Treatment directions and follow-up plan..."
             ></textarea>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Follow-up Date</label>
+              <input
+                value={editForm.followupDate}
+                onChange={(e) => setEditForm({...editForm, followupDate: e.target.value})}
+                type="date"
+                className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Outcome</label>
+              <select
+                value={editForm.outcome}
+                onChange={(e) => setEditForm({...editForm, outcome: e.target.value})}
+                className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none"
+              >
+                <option value="">Select Outcome</option>
+                <option value="Resolved">Resolved</option>
+                <option value="Improved">Improved</option>
+                <option value="Ongoing">Ongoing</option>
+                <option value="Referred">Referred</option>
+                <option value="Lost Follow-up">Lost Follow-up</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Outcome Notes</label>
+            <input
+              value={editForm.outcomeNotes}
+              onChange={(e) => setEditForm({...editForm, outcomeNotes: e.target.value})}
+              type="text"
+              className="w-full px-3 py-1.5 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-xs outline-none"
+              placeholder="Patient response, complications..."
+            />
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Clinical Notes</label>
@@ -578,8 +746,20 @@ export function Consultations() {
             ))}
             {filteredVisits.length === 0 && (
               <tr>
-                <Td colSpan={6} className="text-center py-8 text-slate-500 text-[13px]">
-                  No consultations found.
+                <Td colSpan={6}>
+                  <EmptyState
+                    icon={<FileText size={36} />}
+                    title="No consultations found"
+                    description="Start a new consultation to record patient visits and diagnoses."
+                    action={
+                      <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded text-[12px] font-semibold transition-colors inline-flex items-center gap-1"
+                      >
+                        <PlusCircle size={14} /> New Consultation
+                      </button>
+                    }
+                  />
                 </Td>
               </tr>
             )}

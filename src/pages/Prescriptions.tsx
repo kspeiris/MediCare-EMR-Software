@@ -3,12 +3,14 @@ import { Badge } from '@/components/ui/Badge';
 import { useState, useMemo, useEffect } from 'react';
 import { getLocalDate } from '@/lib/dates';
 import { Modal } from '@/components/ui/Modal';
-import { Search, Printer, AlertTriangle, Plus, Trash2, Edit2, Download } from 'lucide-react';
+import { Search, Printer, AlertTriangle, Plus, Trash2, Edit2, Download, RefreshCw, Pill } from 'lucide-react';
 import { db, Prescription, Patient, Consultation, MedicineItem, DoctorProfile } from '@/services/db';
 import { useLocation } from 'react-router-dom';
 import { PrescriptionPrintTemplate } from '@/components/print-templates/PrescriptionPrintTemplate';
 import { generatePDF } from '@/components/print-templates/pdfExport';
 import { onDbChange } from '@/services/db';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { InlineBanner } from '@/components/ui/InlineBanner';
 
 export function Prescriptions() {
   const location = useLocation();
@@ -48,6 +50,7 @@ export function Prescriptions() {
 
   const [editMedicines, setEditMedicines] = useState<MedicineItem[]>([]);
   const [printPresc, setPrintPresc] = useState<Prescription | null>(null);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (location.state && (location.state as any).patientId) {
@@ -143,34 +146,37 @@ export function Prescriptions() {
 
   const handleCreatePrescription = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (!selectedPatientId || medicines.length === 0 || !medicines[0].name) return;
 
     const validMedicines = medicines.filter(m => m.name.trim() !== '');
     if (validMedicines.length === 0) return;
 
-    const newPresc = await db.addPrescription({
-      consultationId: selectedConsultationId || 'CNS-NONE',
-      patientId: selectedPatientId,
-      date: getLocalDate(),
-      medicines: validMedicines.map(m => ({
-        name: m.name,
-        strength: m.strength,
-        dosage: m.dosage,
-        frequency: m.frequency,
-        duration: m.duration,
-        route: m.route,
-        quantity: Number(m.quantity) || 10,
-        instructions: m.instructions
-      }))
-    });
+    try {
+      const newPresc = await db.addPrescription({
+        consultationId: selectedConsultationId || 'CNS-NONE',
+        patientId: selectedPatientId,
+        date: getLocalDate(),
+        medicines: validMedicines.map(m => ({
+          name: m.name,
+          strength: m.strength,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          duration: m.duration,
+          route: m.route,
+          quantity: Number(m.quantity) || 10,
+          instructions: m.instructions
+        }))
+      });
 
-    loadData();
-    
-    setMedicines([{ name: '', strength: '', dosage: '1 tablet', frequency: 'Once a day', duration: '7 days', route: 'Oral', quantity: 10, instructions: 'Take after meals' }]);
-    setAllergyWarning('');
-    setIsModalOpen(false);
-
-    setPrintPresc(newPresc);
+      loadData();
+      setSelectedPatientId('');
+      setSelectedConsultationId('');
+      setMedicines([{ name: '', strength: '', dosage: '1 tablet', frequency: 'Once a day', duration: '7 days', route: 'Oral', quantity: 10, instructions: 'Take after meals' }]);
+      setIsModalOpen(false);
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to create prescription. Please try again.');
+    }
   };
 
   const handleEditClick = (prescription: Prescription) => {
@@ -211,6 +217,12 @@ export function Prescriptions() {
       await db.deletePrescription(id);
       loadData();
     }
+  };
+
+  const handleRenewPrescription = async (id: string) => {
+    if (!window.confirm("Renew this prescription? A new prescription will be created with the same medicines.")) return;
+    await db.renewPrescription(id);
+    loadData();
   };
 
   const handlePrintAction = () => {
@@ -279,8 +291,13 @@ export function Prescriptions() {
         )}
       </Modal>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create New E-Prescription">
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setFormError(''); }} title="Create New E-Prescription">
         <form className="space-y-4" onSubmit={handleCreatePrescription}>
+          {formError && (
+            <InlineBanner variant="error" title="Error" onDismiss={() => setFormError('')}>
+              {formError}
+            </InlineBanner>
+          )}
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Patient</label>
             <select 
@@ -543,21 +560,28 @@ export function Prescriptions() {
                 <Td>{prescription.date}</Td>
                 <Td>
                   <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setPrintPresc(prescription)} 
+                    <button
+                      onClick={() => setPrintPresc(prescription)}
                       className="text-sky-500 hover:text-sky-600 p-1"
                       title="Print"
                     >
                       <Printer size={12} />
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleEditClick(prescription)}
                       className="text-slate-400 hover:text-slate-600 p-1"
                       title="Edit"
                     >
                       <Edit2 size={12} />
                     </button>
-                    <button 
+                    <button
+                      onClick={() => handleRenewPrescription(prescription.id)}
+                      className="text-emerald-500 hover:text-emerald-600 p-1"
+                      title="Renew"
+                    >
+                      <RefreshCw size={12} />
+                    </button>
+                    <button
                       onClick={() => handleDelete(prescription.id)}
                       className="text-red-400 hover:text-red-600 p-1"
                       title="Delete"
@@ -570,8 +594,20 @@ export function Prescriptions() {
             ))}
             {filteredPrescriptions.length === 0 && (
               <tr>
-                <Td colSpan={5} className="text-center py-8 text-slate-500 text-[13px]">
-                  No prescriptions found.
+                <Td colSpan={5}>
+                  <EmptyState
+                    icon={<Pill size={36} />}
+                    title="No prescriptions found"
+                    description=" prescriptions will appear here after consultations."
+                    action={
+                      <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="bg-sky-500 hover:bg-sky-600 text-white px-3 py-1.5 rounded text-[12px] font-semibold transition-colors inline-flex items-center gap-1"
+                      >
+                        <Plus size={14} /> New Prescription
+                      </button>
+                    }
+                  />
                 </Td>
               </tr>
             )}
