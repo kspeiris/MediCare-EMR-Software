@@ -140,7 +140,7 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout, onToggleSidebar }: 
         <div className="flex items-center gap-3 text-slate-500 relative">
           
           <div ref={notifRef}>
-            <button onClick={() => setShowNotifications(!showNotifications)} className="hover:text-slate-800 dark:hover:text-slate-100 relative p-1">
+            <button onClick={() => setShowNotifications(!showNotifications)} className="hover:text-slate-800 dark:hover:text-slate-100 relative p-1 cursor-pointer">
               <Bell size={16} />
               {todaysAppointments.length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center leading-none">
@@ -199,8 +199,8 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout, onToggleSidebar }: 
             )}
           </div>
 
-          <button onClick={() => navigate('/appointments')} className="hover:text-slate-800 dark:hover:text-slate-100 p-1"><Calendar size={16} /></button>
-          <button onClick={() => setDarkMode(!darkMode)} className="hover:text-slate-800 dark:hover:text-slate-100 p-1">
+          <button onClick={() => navigate('/appointments')} className="hover:text-slate-800 dark:hover:text-slate-100 p-1 cursor-pointer"><Calendar size={16} /></button>
+          <button onClick={() => setDarkMode(!darkMode)} className="hover:text-slate-800 dark:hover:text-slate-100 p-1 cursor-pointer">
             {darkMode ? <Sun size={16} /> : <Moon size={16} />}
           </button>
         </div>
