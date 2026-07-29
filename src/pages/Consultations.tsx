@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useState, useMemo, useEffect } from 'react';
 import { getLocalDate } from '@/lib/dates';
 import { Modal } from '@/components/ui/Modal';
-import { Search, PlusCircle, Edit2, Trash2, Download, Printer } from 'lucide-react';
+import { Search, PlusCircle, Edit2, Trash2, Download, Printer, Eye } from 'lucide-react';
 import { db, Consultation } from '@/services/db';
 import { Link } from 'react-router-dom';
 import { ConsultationPrintTemplate } from '@/components/print-templates/ConsultationPrintTemplate';
@@ -364,30 +364,35 @@ export function Consultations() {
         </form>
       </Modal>
 
-      <Modal isOpen={!!selectedVisit} onClose={() => setSelectedVisit(null)} title="Consultation Details">
+      <Modal isOpen={!!selectedVisit} onClose={() => setSelectedVisit(null)} title="Consultation Details" className="max-w-4xl">
         {selectedVisit && (
           <div className="space-y-4">
-            <div className="flex justify-end gap-2 mb-4 no-print">
+            <div className="flex justify-end gap-2 mb-2 no-print">
               <button
                 onClick={handleExportPDF}
                 disabled={isGeneratingPDF}
-                className="px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 rounded hover:bg-slate-50 flex items-center gap-1 disabled:opacity-50"
+                className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
               >
                 <Download size={14} />
-                {isGeneratingPDF ? 'Generating PDF...' : 'Export PDF'}
+                {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
               </button>
-              <button onClick={handlePrintAction} className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1">
+              <button 
+                onClick={handlePrintAction} 
+                className="bg-slate-900 dark:bg-sky-600 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-slate-800 dark:hover:bg-sky-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
                 <Printer size={14} /> Print
               </button>
             </div>
-            <div id="printable-consultation" className="hidden">
-              <ConsultationPrintTemplate
-                consultation={selectedVisit}
-                patient={patients.find(p => p.id === selectedVisit.patientId)}
-                doctor={doc}
-              />
+            <div className="bg-slate-100 dark:bg-slate-950 p-6 rounded-lg max-h-[60vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
+              <div id="printable-consultation" className="bg-white text-slate-900 shadow-sm mx-auto">
+                <ConsultationPrintTemplate
+                  consultation={selectedVisit}
+                  patient={patients.find(p => p.id === selectedVisit.patientId)}
+                  doctor={doc}
+                />
+              </div>
             </div>
-            <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-slate-800 no-print">
               <button onClick={() => handleDelete(selectedVisit.id)} className="px-4 py-2 text-[12px] font-semibold text-red-600 hover:text-red-700 border border-red-200 rounded hover:bg-red-50 flex items-center gap-1">
                 <Trash2 size={14} /> Delete
               </button>
@@ -548,21 +553,24 @@ export function Consultations() {
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => setSelectedVisit(visit)}
-                      className="text-sky-500 hover:text-sky-655 font-semibold text-[12px]"
+                      className="text-sky-500 hover:text-sky-655 p-1"
+                      title="View Details"
                     >
-                      View Details
+                      <Eye size={12} />
                     </button>
                     <button 
                       onClick={() => handleEditClick(visit)}
-                      className="text-slate-400 hover:text-slate-600 flex items-center gap-1 text-[12px]"
+                      className="text-slate-400 hover:text-slate-600 p-1"
+                      title="Edit"
                     >
-                      <Edit2 size={12} /> Edit
+                      <Edit2 size={12} />
                     </button>
                     <button 
                       onClick={() => handleDelete(visit.id)}
-                      className="text-red-400 hover:text-red-600 flex items-center gap-1 text-[12px]"
+                      className="text-red-400 hover:text-red-605 p-1"
+                      title="Delete"
                     >
-                      <Trash2 size={12} /> Delete
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </Td>

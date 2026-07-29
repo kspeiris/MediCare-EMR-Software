@@ -247,28 +247,33 @@ export function Prescriptions() {
         </button>
       </div>
 
-      <Modal isOpen={!!printPresc} onClose={() => setPrintPresc(null)} title="Prescription Print Preview">
+      <Modal isOpen={!!printPresc} onClose={() => setPrintPresc(null)} title="Prescription Print Preview" className="max-w-4xl">
         {printPresc && (
-          <div className="space-y-6">
-            <div className="flex justify-end gap-2 mb-4 no-print">
+          <div className="space-y-4">
+            <div className="flex justify-end gap-2 mb-2 no-print">
               <button
                 onClick={handleExportPDF}
                 disabled={isGeneratingPDF}
-                className="px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 rounded hover:bg-slate-50 flex items-center gap-1 disabled:opacity-50"
+                className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
               >
                 <Download size={14} />
-                {isGeneratingPDF ? 'Generating PDF...' : 'Export PDF'}
+                {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
               </button>
-              <button onClick={handlePrintAction} className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1">
+              <button 
+                onClick={handlePrintAction} 
+                className="bg-slate-900 dark:bg-sky-600 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-slate-800 dark:hover:bg-sky-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
                 <Printer size={14} /> Print
               </button>
             </div>
-            <div id="printable-prescription" className="hidden">
-              <PrescriptionPrintTemplate
-                prescription={printPresc}
-                patient={patients.find(p => p.id === printPresc.patientId)}
-                doctor={doc}
-              />
+            <div className="bg-slate-100 dark:bg-slate-950 p-6 rounded-lg max-h-[60vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
+              <div id="printable-prescription" className="bg-white text-slate-900 shadow-sm mx-auto">
+                <PrescriptionPrintTemplate
+                  prescription={printPresc}
+                  patient={patients.find(p => p.id === printPresc.patientId)}
+                  doctor={doc}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -540,21 +545,24 @@ export function Prescriptions() {
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => setPrintPresc(prescription)} 
-                      className="text-sky-500 hover:text-sky-600 font-semibold flex items-center gap-1 text-[12px]"
+                      className="text-sky-500 hover:text-sky-600 p-1"
+                      title="Print"
                     >
-                      <Printer size={12} /> Print
+                      <Printer size={12} />
                     </button>
                     <button 
                       onClick={() => handleEditClick(prescription)}
-                      className="text-slate-400 hover:text-slate-600 flex items-center gap-1 text-[12px]"
+                      className="text-slate-400 hover:text-slate-600 p-1"
+                      title="Edit"
                     >
-                      <Edit2 size={12} /> Edit
+                      <Edit2 size={12} />
                     </button>
                     <button 
                       onClick={() => handleDelete(prescription.id)}
-                      className="text-red-400 hover:text-red-600 flex items-center gap-1 text-[12px]"
+                      className="text-red-400 hover:text-red-600 p-1"
+                      title="Delete"
                     >
-                      <Trash2 size={12} /> Delete
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </Td>

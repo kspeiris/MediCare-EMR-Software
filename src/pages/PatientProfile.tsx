@@ -47,6 +47,8 @@ export function PatientProfile() {
   const [isEditDocOpen, setIsEditDocOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<MedicalDocument | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [bannerMessage, setBannerMessage] = useState('');
   
   const [docName, setDocName] = useState('');
   const [docType, setDocType] = useState('Laboratory Reports');

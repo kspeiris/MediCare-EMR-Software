@@ -162,28 +162,33 @@ export function Certificates() {
         </button>
       </div>
 
-      <Modal isOpen={!!printCert} onClose={() => setPrintCert(null)} title="Medical Certificate Print Preview">
+      <Modal isOpen={!!printCert} onClose={() => setPrintCert(null)} title="Medical Certificate Print Preview" className="max-w-4xl">
         {printCert && (
-          <div className="space-y-6">
-            <div className="flex justify-end gap-2 mb-4 no-print">
+          <div className="space-y-4">
+            <div className="flex justify-end gap-2 mb-2 no-print">
               <button
                 onClick={handleExportPDF}
                 disabled={isGeneratingPDF}
-                className="px-4 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 rounded hover:bg-slate-50 flex items-center gap-1 disabled:opacity-50"
+                className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1.5 disabled:opacity-50 transition-colors cursor-pointer"
               >
                 <Download size={14} />
-                {isGeneratingPDF ? 'Generating PDF...' : 'Export PDF'}
+                {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
               </button>
-              <button onClick={handlePrintAction} className="bg-sky-500 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-sky-600 flex items-center gap-1">
+              <button 
+                onClick={handlePrintAction} 
+                className="bg-slate-900 dark:bg-sky-600 text-white px-4 py-2 rounded text-[12px] font-semibold hover:bg-slate-800 dark:hover:bg-sky-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
                 <Printer size={14} /> Print
               </button>
             </div>
-            <div id="printable-certificate" className="hidden">
-              <CertificatePrintTemplate
-                certificate={printCert}
-                patient={patients.find(p => p.id === printCert.patientId)}
-                doctor={doc}
-              />
+            <div className="bg-slate-100 dark:bg-slate-950 p-6 rounded-lg max-h-[60vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
+              <div id="printable-certificate" className="bg-white text-slate-900 shadow-sm mx-auto">
+                <CertificatePrintTemplate
+                  certificate={printCert}
+                  patient={patients.find(p => p.id === printCert.patientId)}
+                  doctor={doc}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -308,14 +313,14 @@ export function Certificates() {
                   <Td>{cert.issueDate}</Td>
                   <Td className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => setPrintCert(cert)} className="p-1 text-sky-500 hover:text-sky-700 transition-colors inline-flex items-center gap-1 text-xs font-semibold">
-                        <Printer size={13} /> Print
+                      <button onClick={() => setPrintCert(cert)} className="p-1 text-sky-500 hover:text-sky-700 transition-colors" title="Print">
+                        <Printer size={13} />
                       </button>
-                      <button onClick={() => handleEditClick(cert)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors inline-flex items-center gap-1 text-xs font-semibold">
-                        <Edit2 size={13} /> Edit
+                      <button onClick={() => handleEditClick(cert)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors" title="Edit">
+                        <Edit2 size={13} />
                       </button>
-                      <button onClick={() => handleDelete(cert.id)} className="p-1 text-red-400 hover:text-red-600 transition-colors inline-flex items-center gap-1 text-xs font-semibold">
-                        <Trash2 size={13} /> Delete
+                      <button onClick={() => handleDelete(cert.id)} className="p-1 text-red-400 hover:text-red-600 transition-colors" title="Delete">
+                        <Trash2 size={13} />
                       </button>
                     </div>
                   </Td>
