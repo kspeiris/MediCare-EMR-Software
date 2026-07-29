@@ -9,22 +9,29 @@ import { onDbChange } from '@/services/db';
 
 export function Dashboard() {
   const [isExporting, setIsExporting] = useState(false);
-  const [, setRefreshTick] = useState(0);
+  const [patients, setPatients] = useState(() => db.getPatientsSync());
+  const [consultations, setConsultations] = useState(() => db.getConsultationsSync());
+  const [appointments, setAppointments] = useState(() => db.getAppointmentsSync());
+  const [certificates, setCertificates] = useState(() => db.getCertificatesSync());
+  const [logs, setLogs] = useState(() => db.getActivityLogsSync());
+
+  const loadData = () => {
+    db.getPatients().then(setPatients);
+    db.getConsultations().then(setConsultations);
+    db.getAppointments().then(setAppointments);
+    db.getCertificates().then(setCertificates);
+    db.getActivityLogs().then(setLogs);
+  };
 
   useEffect(() => {
-    const unsub1 = onDbChange('patients:changed', () => setRefreshTick(t => t + 1));
-    const unsub2 = onDbChange('consultations:changed', () => setRefreshTick(t => t + 1));
-    const unsub3 = onDbChange('appointments:changed', () => setRefreshTick(t => t + 1));
-    const unsub4 = onDbChange('certificates:changed', () => setRefreshTick(t => t + 1));
-    const unsub5 = onDbChange('logs:changed', () => setRefreshTick(t => t + 1));
+    loadData();
+    const unsub1 = onDbChange('patients:changed', loadData);
+    const unsub2 = onDbChange('consultations:changed', loadData);
+    const unsub3 = onDbChange('appointments:changed', loadData);
+    const unsub4 = onDbChange('certificates:changed', loadData);
+    const unsub5 = onDbChange('logs:changed', loadData);
     return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
   }, []);
-
-  const patients = db.getPatientsSync();
-  const consultations = db.getConsultationsSync();
-  const appointments = db.getAppointmentsSync();
-  const certificates = db.getCertificatesSync();
-  const logs = db.getActivityLogsSync();
 
   const todayStr = getLocalDate();
 
@@ -133,18 +140,27 @@ export function Dashboard() {
             <h3 className="text-[14px] font-semibold text-slate-900 dark:text-white">Monthly Consultations Trend</h3>
           </div>
           <div className="h-64 p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dx={-10} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '6px', border: '1px solid var(--tooltip-border)', backgroundColor: 'var(--tooltip-bg)', color: 'var(--tooltip-text)', fontSize: '12px', padding: '8px' }}
-                  cursor={{ fill: 'var(--tooltip-cursor)' }}
-                />
-                <Bar dataKey="visits" fill="#0284c7" radius={[2, 2, 0, 0]} barSize={12} />
-              </BarChart>
-            </ResponsiveContainer>
+            {consultations.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748B' }} dx={-10} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '6px', border: '1px solid var(--tooltip-border)', backgroundColor: 'var(--tooltip-bg)', color: 'var(--tooltip-text)', fontSize: '12px', padding: '8px' }}
+                    cursor={{ fill: 'var(--tooltip-cursor)' }}
+                  />
+                  <Bar dataKey="visits" fill="#0284c7" radius={[2, 2, 0, 0]} barSize={12} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center rounded-md border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-center">
+                <div>
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No consultation data yet</p>
+                  <p className="text-xs text-slate-400 mt-1">The trend chart will appear once visits are recorded.</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         
@@ -155,26 +171,32 @@ export function Dashboard() {
             <Link to="/logs" className="text-sky-600 dark:text-sky-400 text-[11px] font-semibold hover:underline">View Logs</Link>
           </div>
           <div className="flex-1 p-4 overflow-y-auto space-y-4 max-h-[256px]">
-            {logs.slice(0, 5).map((activity, i) => (
-              <div key={i} className="flex gap-3">
-                 <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-700 flex items-center justify-center shrink-0">
-                  {activity.action.includes('Backup') || activity.action.includes('Restore') ? (
-                    <ShieldAlert size={14} className="text-amber-500" />
-                  ) : activity.action.includes('Certificate') ? (
-                    <Award size={14} className="text-sky-500" />
-                  ) : (
-                    <Users size={14} className="text-slate-500" />
-                  )}
+            {logs.length > 0 ? (
+              logs.slice(0, 5).map((activity, i) => (
+                <div key={i} className="flex gap-3">
+                   <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-700 flex items-center justify-center shrink-0">
+                    {activity.action.includes('Backup') || activity.action.includes('Restore') ? (
+                      <ShieldAlert size={14} className="text-amber-500" />
+                    ) : activity.action.includes('Certificate') ? (
+                      <Award size={14} className="text-sky-500" />
+                    ) : (
+                      <Users size={14} className="text-slate-500" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[12px] text-slate-700 dark:text-slate-300 leading-snug font-medium">{activity.action}</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{activity.description}</p>
+                    <span className="text-[9px] text-slate-400 font-mono font-medium block mt-0.5">{activity.createdAt}</span>
+                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="h-full flex items-center justify-center rounded-md border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-center py-8">
                 <div>
-                  <p className="text-[12px] text-slate-700 dark:text-slate-300 leading-snug font-medium">{activity.action}</p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{activity.description}</p>
-                  <span className="text-[9px] text-slate-400 font-mono font-medium block mt-0.5">{activity.createdAt}</span>
+                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No recent activity yet</p>
+                  <p className="text-xs text-slate-400 mt-1">Actions will appear here as the clinic workflow runs.</p>
                 </div>
               </div>
-            ))}
-            {logs.length === 0 && (
-              <p className="text-xs text-slate-500 text-center py-4">No recent EMR activities.</p>
             )}
           </div>
         </div>

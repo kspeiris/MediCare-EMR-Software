@@ -364,6 +364,26 @@ module.exports = {
     }
   },
 
+  deleteByPatient(table, patientId) {
+    const database = getDb();
+    try {
+      database.prepare(`DELETE FROM ${table} WHERE patientId = ?`).run(patientId);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  clear(table) {
+    const database = getDb();
+    try {
+      database.prepare(`DELETE FROM ${table}`).run();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
   list(table) {
     return this.query(`SELECT * FROM ${table} ORDER BY createdAt DESC`);
   },

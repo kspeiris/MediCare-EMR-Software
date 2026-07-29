@@ -43,6 +43,20 @@ ipcMain.handle("db:table", async (event, action, table, payload) => {
         }
         break;
       }
+      case "clear": {
+        result = database.clear(table);
+        if (result.success) {
+          broadcast("db:changed", table);
+        }
+        break;
+      }
+      case "deleteByPatient": {
+        result = database.deleteByPatient(table, payload.patientId);
+        if (result.success) {
+          broadcast("db:changed", table);
+        }
+        break;
+      }
       case "count":
         result = database.count(table);
         break;

@@ -573,6 +573,8 @@ export const db = {
   },
 
   getCurrentUser: (): { id: string; username: string; role: string } | null => {
+    const authenticated = localStorage.getItem('emr_authenticated') === 'true';
+    if (!authenticated) return null;
     const username = getStorageItem('emr_username', 'doctor');
     const doctor = getDoctorProfileSync();
     return {
@@ -676,14 +678,38 @@ export const db = {
 
   deletePatient: async (id: string) => {
     await transaction(async () => {
+      const relatedTables = ['consultations', 'prescriptions', 'appointments', 'certificates', 'documents'];
       if (isElectron()) {
+        for (const table of relatedTables) {
+          const result = await invokeDb('deleteByPatient', table, { patientId: id });
+          if (!result.success) {
+            throw new Error(result.error || `Failed to remove related ${table} records.`);
+          }
+        }
         await invokeDb('delete', 'patients', { id });
       }
       const updatedList = syncGetPatients().filter(p => p.id !== id);
       setStorageItem('emr_patients', updatedList);
       if (isElectron()) electronCache.patients = updatedList;
+      setStorageItem('emr_consultations', syncGetConsultations().filter(c => c.patientId !== id));
+      setStorageItem('emr_prescriptions', syncGetPrescriptions().filter(p => p.patientId !== id));
+      setStorageItem('emr_appointments', syncGetAppointments().filter(a => a.patientId !== id));
+      setStorageItem('emr_certificates', syncGetCertificates().filter(c => c.patientId !== id));
+      setStorageItem('emr_documents', syncGetDocuments().filter(d => d.patientId !== id));
+      if (isElectron()) {
+        electronCache.consultations = syncGetConsultations().filter(c => c.patientId !== id);
+        electronCache.prescriptions = syncGetPrescriptions().filter(p => p.patientId !== id);
+        electronCache.appointments = syncGetAppointments().filter(a => a.patientId !== id);
+        electronCache.certificates = syncGetCertificates().filter(c => c.patientId !== id);
+        electronCache.documents = syncGetDocuments().filter(d => d.patientId !== id);
+      }
       await db.logActivity('Patient Deleted', 'Deleted patient record ID: ' + id);
       emitDbChange('patients:changed');
+      emitDbChange('consultations:changed');
+      emitDbChange('prescriptions:changed');
+      emitDbChange('appointments:changed');
+      emitDbChange('certificates:changed');
+      emitDbChange('documents:changed');
     });
   },
 
@@ -711,6 +737,10 @@ export const db = {
 
   addConsultation: async (consultation: Omit<Consultation, 'id' | 'createdAt'>): Promise<Consultation> => {
     return transaction(async () => {
+      const patientExists = syncGetPatients().some(p => p.id === consultation.patientId);
+      if (!patientExists) {
+        throw new Error('Selected patient does not exist.');
+      }
       const id = generateId('CNS');
       const newConsultation: Consultation = {
         ...consultation,
@@ -731,6 +761,9 @@ export const db = {
 
   updateConsultation: async (id: string, updatedFields: Partial<Consultation>) => {
     await transaction(async () => {
+      if (updatedFields.patientId && !syncGetPatients().some(p => p.id === updatedFields.patientId)) {
+        throw new Error('Selected patient does not exist.');
+      }
       if (isElectron()) {
         await invokeDb('update', 'consultations', { id, data: updatedFields });
       }
@@ -779,6 +812,16 @@ export const db = {
 
   addPrescription: async (prescription: Omit<Prescription, 'id'>): Promise<Prescription> => {
     return transaction(async () => {
+      const patientExists = syncGetPatients().some(p => p.id === prescription.patientId);
+      if (!patientExists) {
+        throw new Error('Selected patient does not exist.');
+      }
+      if (prescription.consultationId && prescription.consultationId !== 'CNS-NONE') {
+        const consultationExists = syncGetConsultations().some(c => c.id === prescription.consultationId && c.patientId === prescription.patientId);
+        if (!consultationExists) {
+          throw new Error('Selected consultation does not exist for this patient.');
+        }
+      }
       const id = generateId('RX');
       const newPrescription = { ...prescription, id };
       if (isElectron()) {
@@ -795,6 +838,21 @@ export const db = {
 
   updatePrescription: async (id: string, updatedFields: Partial<Prescription>) => {
     await transaction(async () => {
+      const nextPatientId = updatedFields.patientId;
+      const current = syncGetPrescriptions().find(p => p.id === id);
+      if (nextPatientId && !syncGetPatients().some(p => p.id === nextPatientId)) {
+        throw new Error('Selected patient does not exist.');
+      }
+      if (updatedFields.consultationId || nextPatientId) {
+        const patientId = nextPatientId || current?.patientId;
+        const consultationId = updatedFields.consultationId || current?.consultationId;
+        if (consultationId && consultationId !== 'CNS-NONE') {
+          const consultationExists = syncGetConsultations().some(c => c.id === consultationId && c.patientId === patientId);
+          if (!consultationExists) {
+            throw new Error('Selected consultation does not exist for this patient.');
+          }
+        }
+      }
       if (isElectron()) {
         await invokeDb('update', 'prescriptions', { id, data: updatedFields });
       }
@@ -833,6 +891,10 @@ export const db = {
 
   addAppointment: async (apt: Omit<Appointment, 'id'>): Promise<Appointment> => {
     return transaction(async () => {
+      const patientExists = syncGetPatients().some(p => p.id === apt.patientId);
+      if (!patientExists) {
+        throw new Error('Selected patient does not exist.');
+      }
       const appointments = syncGetAppointments();
       const existing = appointments.find(a =>
         a.patientId === apt.patientId &&
@@ -872,6 +934,9 @@ export const db = {
 
   updateAppointment: async (id: string, updatedFields: Partial<Appointment>) => {
     await transaction(async () => {
+      if (updatedFields.patientId && !syncGetPatients().some(p => p.id === updatedFields.patientId)) {
+        throw new Error('Selected patient does not exist.');
+      }
       if (isElectron()) {
         await invokeDb('update', 'appointments', { id, data: updatedFields });
       }
@@ -910,6 +975,10 @@ export const db = {
 
   addCertificate: async (cert: Omit<MedicalCertificate, 'id'>): Promise<MedicalCertificate> => {
     return transaction(async () => {
+      const patientExists = syncGetPatients().some(p => p.id === cert.patientId);
+      if (!patientExists) {
+        throw new Error('Selected patient does not exist.');
+      }
       const id = generateId('MC');
       const newCert = { ...cert, id };
       if (isElectron()) {
@@ -926,6 +995,9 @@ export const db = {
 
   updateCertificate: async (id: string, updatedFields: Partial<MedicalCertificate>) => {
     await transaction(async () => {
+      if (updatedFields.patientId && !syncGetPatients().some(p => p.id === updatedFields.patientId)) {
+        throw new Error('Selected patient does not exist.');
+      }
       if (isElectron()) {
         await invokeDb('update', 'certificates', { id, data: updatedFields });
       }
@@ -1048,6 +1120,9 @@ export const db = {
 
   clearActivityLogs: async () => {
     await transaction(async () => {
+      if (isElectron()) {
+        await invokeDb('clear', 'logs');
+      }
       setStorageItem('emr_logs', []);
       if (isElectron()) electronCache.logs = [];
       emitDbChange('logs:changed');
@@ -1094,8 +1169,24 @@ export const db = {
   restoreBackup: async (backupStr: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const parsed = JSON.parse(backupStr);
-      if (!parsed.patients || !Array.isArray(parsed.patients)) {
+      if (!parsed || typeof parsed !== 'object') {
+        return { success: false, error: 'Invalid backup format.' };
+      }
+      if (!Array.isArray(parsed.patients)) {
         return { success: false, error: 'Invalid backup format: missing patients array.' };
+      }
+      const arraysToValidate: Array<[keyof typeof parsed, string]> = [
+        ['consultations', 'consultations'],
+        ['prescriptions', 'prescriptions'],
+        ['appointments', 'appointments'],
+        ['certificates', 'certificates'],
+        ['documents', 'documents'],
+        ['logs', 'logs']
+      ];
+      for (const [key, label] of arraysToValidate) {
+        if (parsed[key] !== undefined && !Array.isArray(parsed[key])) {
+          return { success: false, error: `Invalid backup format: ${label} must be an array.` };
+        }
       }
       if (isElectron()) {
         const result = await invokeDb('importBackup', '*', { data: parsed });

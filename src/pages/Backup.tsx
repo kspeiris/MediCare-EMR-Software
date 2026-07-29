@@ -79,13 +79,7 @@ export function Backup() {
     try {
       let content: string;
       if (typeof window !== 'undefined' && window.electronAPI?.isDesktop) {
-        const readResult = await window.electronAPI.backup.read();
-        if (!readResult.success) {
-          setErrorMessage(readResult.cancelled ? 'Import cancelled.' : (readResult.error || 'Failed to read backup file.'));
-          e.target.value = '';
-          return;
-        }
-        content = readResult.content || '';
+        content = await readRestoreFile(file);
       } else {
         content = await readRestoreFile(file);
       }
