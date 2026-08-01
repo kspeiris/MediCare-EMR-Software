@@ -49,15 +49,17 @@ export function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-slate-900 text-slate-100 overflow-hidden p-4">
-      {/* Premium Background Effects */}
-      <div className="absolute inset-0 z-0">
+    <div 
+      className="relative flex flex-col items-center justify-center min-h-screen text-slate-100 overflow-hidden p-4"
+      style={{ backgroundImage: 'url("/login_bg.jpg")', backgroundSize: 'cover', backgroundPosition: 'center' }}
+    >
+      {/* Premium Background Overlay & Effects */}
+      <div className="absolute inset-0 z-0 bg-slate-950/75 backdrop-blur-[3px]">
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-sky-500/10 blur-[128px]" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-emerald-500/10 blur-[128px]" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-30" />
       </div>
 
-      <div className="relative z-10 w-full max-w-4xl bg-slate-950/60 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 overflow-hidden grid md:grid-cols-12">
+      <div className="relative z-10 w-full max-w-4xl bg-slate-950/75 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 overflow-hidden grid md:grid-cols-12">
         {/* Left Side: Stunning Medical Illustration Side Panel */}
         <div className="hidden md:flex md:col-span-6 bg-slate-950 p-10 flex-col justify-between relative overflow-hidden border-r border-slate-800">
           <div className="absolute inset-0 bg-gradient-to-tr from-sky-950/50 to-emerald-950/30 opacity-40 z-0" />
