@@ -390,26 +390,52 @@ export function PatientProfile() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left Column (Medical History, Vitals, Documents) */}
-        <div className="lg:col-span-1 space-y-4 no-print">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Left Column - Quick Insight Cards */}
+        <div className="xl:col-span-1 space-y-4 no-print">
           {/* Allergy & Interaction Alerts */}
-          <AllergyAlerts 
-            allergies={patient.allergies || []} 
-            currentMedications={patient.chronicDiseases || ''} 
-            consultations={consultations.map(c => ({ diagnosis: c.diagnosis, medicines: prescriptions.find(p => p.consultationId === c.id)?.medicines || [] }))} 
+          <AllergyAlerts
+            allergies={patient.allergies || []}
+            currentMedications={patient.chronicDiseases || ''}
+            consultations={consultations.map(c => ({ diagnosis: c.diagnosis, medicines: prescriptions.find(p => p.consultationId === c.id)?.medicines || [] }))}
           />
 
-          {/* Medical History */}
+          {/* Quick Stats */}
+          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Visits</span>
+                <span className="text-[20px] font-bold text-sky-600 dark:text-sky-300">{consultations.length}</span>
+                <span className="text-[11px] text-slate-500">Total consultations</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Prescriptions</span>
+                <span className="text-[20px] font-bold text-emerald-600 dark:text-emerald-300">{prescriptions.length}</span>
+                <span className="text-[11px] text-slate-500">Total issued</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Documents</span>
+                <span className="text-[20px] font-bold text-amber-600 dark:text-amber-300">{documents.length}</span>
+                <span className="text-[11px] text-slate-500">Uploaded</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Referrals</span>
+                <span className="text-[20px] font-bold text-indigo-600 dark:text-indigo-300">{referrals.length}</span>
+                <span className="text-[11px] text-slate-500">Total</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Medical Info Summary */}
           <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide">Medical Info Summary</h3>
-              <button onClick={() => setIsEditModalOpen(true)} className="text-sky-500 hover:text-sky-700 text-[11px] font-semibold">Edit History</button>
+              <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide">Medical Profile</h3>
+              <button onClick={() => setIsEditModalOpen(true)} className="text-sky-500 hover:text-sky-700 text-[11px] font-semibold">Edit</button>
             </div>
-            
-            <div className="space-y-4">
+
+            <div className="space-y-3">
               <div>
-                <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Known Allergies</div>
+                <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Allergies</div>
                 {patient.allergies && patient.allergies.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {patient.allergies.map((allergy, index) => (
@@ -426,11 +452,14 @@ export function PatientProfile() {
                 <p className="text-slate-700 dark:text-slate-350 text-xs font-medium leading-relaxed">{patient.chronicDiseases || 'None recorded'}</p>
               </div>
 
-              <div>
-                <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Habits</div>
-                <div className="text-xs text-slate-700 dark:text-slate-350 flex gap-4 font-semibold">
-                  <span>Smoking: <span className="font-normal">{patient.smokingStatus}</span></span>
-                  <span>Alcohol: <span className="font-normal">{patient.alcoholConsumption}</span></span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Smoking</div>
+                  <p className="text-xs text-slate-700 dark:text-slate-350 font-medium">{patient.smokingStatus}</p>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Alcohol</div>
+                  <p className="text-xs text-slate-700 dark:text-slate-350 font-medium">{patient.alcoholConsumption}</p>
                 </div>
               </div>
             </div>
@@ -439,13 +468,13 @@ export function PatientProfile() {
           {/* Condition History */}
           <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
             <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-3">Condition History</h3>
-            <ConditionHistory consultations={consultations} />
+            <ConditionHistory consultations={consultations} chronicDiseases={patient.chronicDiseases} />
           </div>
 
           {/* Longitudinal Vitals Chart */}
           <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
             <h3 className="text-[13px] font-bold text-slate-900 dark:text-white uppercase tracking-wide mb-3">Longitudinal Vitals</h3>
-            <div className="h-[210px] w-full">
+            <div className="h-auto">
               <VitalsChart consultations={consultations} />
             </div>
           </div>
@@ -459,12 +488,12 @@ export function PatientProfile() {
           />
         </div>
 
-        {/* Right Column - Tabbed View of Patient Records */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-1 flex gap-1 no-print">
+        {/* Right Column - Tabbed Patient Records */}
+        <div className="xl:col-span-2 space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-1 flex gap-1 no-print overflow-x-auto">
             <button
               onClick={() => setActiveTab('timeline')}
-              className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${
+              className={`px-4 py-2 text-xs font-bold rounded transition-colors whitespace-nowrap ${
                 activeTab === 'timeline'
                   ? 'bg-sky-500 text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -474,7 +503,7 @@ export function PatientProfile() {
             </button>
             <button
               onClick={() => setActiveTab('consultations')}
-              className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${
+              className={`px-4 py-2 text-xs font-bold rounded transition-colors whitespace-nowrap ${
                 activeTab === 'consultations'
                   ? 'bg-sky-500 text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -484,7 +513,7 @@ export function PatientProfile() {
             </button>
             <button
               onClick={() => setActiveTab('certificates')}
-              className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${
+              className={`px-4 py-2 text-xs font-bold rounded transition-colors whitespace-nowrap ${
                 activeTab === 'certificates'
                   ? 'bg-sky-500 text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
