@@ -93,6 +93,24 @@ ipcMain.handle("db:table", async (event, action, table, payload) => {
       case "getPrescriptions":
         result = database.getPrescriptions();
         break;
+      case "getReferrals":
+        result = database.getReferrals();
+        break;
+      case "getReferralsByPatient":
+        result = database.getReferralsByPatient(payload.patientId);
+        break;
+      case "getReminders":
+        result = database.getReminders();
+        break;
+      case "getRemindersByPatient":
+        result = database.getRemindersByPatient(payload.patientId);
+        break;
+      case "getChangeLogs":
+        result = database.getChangeLogs();
+        break;
+      case "getChangeHistory":
+        result = database.getChangeHistory(payload.entityType, payload.entityId);
+        break;
       case "getSettings":
         result = { success: true, data: database.getSettings(payload.key) };
         break;

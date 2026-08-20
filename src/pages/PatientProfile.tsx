@@ -284,7 +284,7 @@ export function PatientProfile() {
   );
 
   const handleProfilePicChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!patient || !id) return;
+    if (!id) return;
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -292,7 +292,7 @@ export function PatientProfile() {
         const base64Str = reader.result as string;
         try {
           await db.updatePatient(id, { profilePic: base64Str });
-          setPatient({ ...patient, profilePic: base64Str });
+          setPatient(prev => prev ? { ...prev, profilePic: base64Str } : prev);
         } catch (err) {
           console.error('Failed to update profile picture:', err);
           alert('Failed to save profile picture.');
@@ -449,17 +449,17 @@ export function PatientProfile() {
 
               <div>
                 <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Chronic Conditions</div>
-                <p className="text-slate-700 dark:text-slate-350 text-xs font-medium leading-relaxed">{patient.chronicDiseases || 'None recorded'}</p>
+                <p className="text-slate-700 dark:text-slate-300 text-xs font-medium leading-relaxed">{patient.chronicDiseases || 'None recorded'}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Smoking</div>
-                  <p className="text-xs text-slate-700 dark:text-slate-350 font-medium">{patient.smokingStatus}</p>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">{patient.smokingStatus}</p>
                 </div>
                 <div>
                   <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">Alcohol</div>
-                  <p className="text-xs text-slate-700 dark:text-slate-350 font-medium">{patient.alcoholConsumption}</p>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">{patient.alcoholConsumption}</p>
                 </div>
               </div>
             </div>

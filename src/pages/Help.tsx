@@ -92,12 +92,12 @@ export function Help() {
             <p className="font-bold text-slate-900 dark:text-white">Q: How do backups work in the desktop container?</p>
             <p className="mt-1">A: Go to <strong>Backup</strong>. In desktop mode, saving backups writes directly to your local file system, and imports let you restore state using selected JSON backup files.</p>
           </div>
-          <hr className="border-slate-100 dark:border-slate-850" />
+          <hr className="border-slate-100 dark:border-slate-800" />
           <div>
             <p className="font-bold text-slate-900 dark:text-white">Q: Where is my EMR database stored?</p>
             <p className="mt-1">A: The EMR database persists local state in the app data directory as an `emr.db` JSON file when running as a desktop app, and in browser localStorage when running in a browser.</p>
           </div>
-          <hr className="border-slate-100 dark:border-slate-850" />
+          <hr className="border-slate-100 dark:border-slate-800" />
           <div>
             <p className="font-bold text-slate-900 dark:text-white">Q: Is my data encrypted?</p>
             <p className="mt-1">A: The current version stores data in JSON format. For sensitive deployments, ensure your operating system disk encryption is enabled and use strong passwords in Settings.</p>
@@ -107,24 +107,24 @@ export function Help() {
 
       <Modal isOpen={activeModal === 'shortcuts'} onClose={() => setActiveModal(null)} title="Keyboard Shortcuts Navigation">
         <div className="space-y-3 text-[13px] text-slate-650 dark:text-slate-300">
-          <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-850">
-            <span>Navigation</span>
+           <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
+             <span>Navigation</span>
             <div className="flex gap-2">
               <kbd className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border rounded text-[11px] font-mono">Alt</kbd>
               <span className="text-slate-500">+</span>
               <kbd className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border rounded text-[11px] font-mono">1-9</kbd>
             </div>
           </div>
-          <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-850">
-            <span>Toggle Dark/Light Mode</span>
+           <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
+             <span>Toggle Dark/Light Mode</span>
             <kbd className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border rounded text-[11px] font-mono">Ctrl+D</kbd>
           </div>
-          <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-850">
-            <span>Quick Logout</span>
+           <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
+             <span>Quick Logout</span>
             <kbd className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border rounded text-[11px] font-mono">Ctrl+L</kbd>
           </div>
-          <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-850">
-            <span>Dismiss Dialog / Modal</span>
+           <div className="flex justify-between items-center py-1.5 border-b border-slate-100 dark:border-slate-800">
+             <span>Dismiss Dialog / Modal</span>
             <kbd className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border rounded text-[11px] font-mono">ESC</kbd>
           </div>
         </div>

@@ -87,7 +87,7 @@ export default function App() {
   }
 
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} darkMode={darkMode} setDarkMode={setDarkMode} />;
   }
 
   return (

@@ -10,6 +10,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 
 type ReminderType = Reminder['type'];
 
+const REMINDER_COLORS: Record<string, { bg: string; text: string; border: string; darkBg: string; darkText: string }> = {
+  sky: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200', darkBg: 'dark:bg-sky-950', darkText: 'dark:text-sky-400' },
+  indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', darkBg: 'dark:bg-indigo-950', darkText: 'dark:text-indigo-400' },
+  amber: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', darkBg: 'dark:bg-amber-950', darkText: 'dark:text-amber-400' },
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', darkBg: 'dark:bg-emerald-950', darkText: 'dark:text-emerald-400' }
+};
+
 const REMINDER_CONFIG: Record<ReminderType, { label: string; color: string; icon: any }> = {
   followup: { label: 'Follow-up', color: 'sky', icon: Clock },
   appointment: { label: 'Appointment', color: 'indigo', icon: Calendar },
@@ -235,7 +242,7 @@ export function Reminders() {
                   <Td className="font-semibold text-slate-700 dark:text-slate-300">#{reminder.id}</Td>
                   <Td>{patientName(reminder.patientId)}</Td>
                   <Td>
-                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-${config.color}-50 text-${config.color}-700 border border-${config.color}-200 dark:bg-${config.color}-950 dark:text-${config.color}-400`}>
+                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${REMINDER_COLORS[config.color].bg} ${REMINDER_COLORS[config.color].text} ${REMINDER_COLORS[config.color].border} ${REMINDER_COLORS[config.color].darkBg} ${REMINDER_COLORS[config.color].darkText}`}>
                       <Icon size={10} /> {config.label}
                     </span>
                   </Td>

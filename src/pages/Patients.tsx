@@ -469,7 +469,7 @@ export function Patients() {
                   <Td>{patient.phone}</Td>
                   <Td>
                     <div className="flex items-center gap-3">
-                      <Link to={`/patients/${patient.id}`} className="text-sky-500 hover:text-sky-655 p-1" title="View Profile">
+                      <Link to={`/patients/${patient.id}`} className="text-sky-500 hover:text-sky-600 p-1" title="View Profile">
                         <Eye size={13} />
                       </Link>
                       <button onClick={() => handleOpenEditModal(patient)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1" title="Edit"><Edit2 size={13}/></button>
