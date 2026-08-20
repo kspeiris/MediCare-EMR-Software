@@ -721,7 +721,7 @@ export function Consultations() {
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={() => setSelectedVisit(visit)}
-                      className="text-sky-500 hover:text-sky-655 p-1"
+                       className="text-sky-500 hover:text-sky-600 p-1"
                       title="View Details"
                     >
                       <Eye size={12} />
@@ -735,7 +735,7 @@ export function Consultations() {
                     </button>
                     <button 
                       onClick={() => handleDelete(visit.id)}
-                      className="text-red-400 hover:text-red-605 p-1"
+                       className="text-red-400 hover:text-red-600 p-1"
                       title="Delete"
                     >
                       <Trash2 size={12} />
