@@ -132,8 +132,7 @@ export function Appointments() {
   const handleUpdateStatus = async (id: string, status: Appointment['status']) => {
     const updates: Partial<Appointment> = { status };
     if (status === 'Completed') {
-      const allApts = await db.getAppointments();
-      const existing = allApts.find(a => a.id === id);
+      const existing = appointments.find(a => a.id === id);
       updates.notes = existing?.notes
         ? existing.notes + ' | Checked in: ' + new Date().toLocaleString()
         : 'Checked in: ' + new Date().toLocaleString();
@@ -338,7 +337,7 @@ export function Appointments() {
                         </button>
                         <button 
                           onClick={() => handleUpdateStatus(apt.id, 'Cancelled')}
-                          className="bg-red-50 dark:bg-red-950/40 text-red-650 dark:text-red-400 text-[10px] font-semibold px-2 py-1 rounded hover:bg-red-100"
+                           className="bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[10px] font-semibold px-2 py-1 rounded hover:bg-red-100"
                         >
                           Cancel
                         </button>
@@ -391,19 +390,19 @@ export function Appointments() {
                  <div className="flex gap-1 no-print">
                    <button 
                      onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} 
-                     className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-650 dark:text-slate-300"
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-600 dark:text-slate-300"
                    >
                      Prev
                    </button>
                    <button 
                      onClick={() => setCurrentDate(new Date())} 
-                     className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-650 dark:text-slate-300"
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-600 dark:text-slate-300"
                    >
                      Today
                    </button>
                    <button 
                      onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} 
-                     className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-650 dark:text-slate-300"
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded text-[10px] font-semibold text-slate-600 dark:text-slate-300"
                    >
                      Next
                    </button>
