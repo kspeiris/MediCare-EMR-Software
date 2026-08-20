@@ -117,6 +117,43 @@ function createSchema() {
       immutable INTEGER DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS referrals (
+      id TEXT PRIMARY KEY,
+      patientId TEXT NOT NULL,
+      consultationId TEXT,
+      specialistName TEXT DEFAULT '',
+      facility TEXT DEFAULT '',
+      reason TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      status TEXT DEFAULT 'Pending',
+      date TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS reminders (
+      id TEXT PRIMARY KEY,
+      patientId TEXT NOT NULL,
+      type TEXT DEFAULT 'followup',
+      title TEXT DEFAULT '',
+      message TEXT DEFAULT '',
+      dueDate TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      relatedId TEXT,
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS changelog (
+      id TEXT PRIMARY KEY,
+      entityType TEXT NOT NULL,
+      entityId TEXT NOT NULL,
+      field TEXT NOT NULL,
+      oldValue TEXT DEFAULT '',
+      newValue TEXT DEFAULT '',
+      changedAt TEXT NOT NULL,
+      changedBy TEXT DEFAULT 'doctor',
+      undoData TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT DEFAULT ''
@@ -140,6 +177,9 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date);
     CREATE INDEX IF NOT EXISTS idx_documents_patient ON documents(patientId);
     CREATE INDEX IF NOT EXISTS idx_logs_created ON logs(createdAt);
+    CREATE INDEX IF NOT EXISTS idx_referrals_patient ON referrals(patientId);
+    CREATE INDEX IF NOT EXISTS idx_reminders_patient ON reminders(patientId);
+    CREATE INDEX IF NOT EXISTS idx_changelog_entity ON changelog(entityId);
   `);
 
   const doctorCount = database.prepare('SELECT COUNT(*) as count FROM doctor').get().count;
@@ -452,6 +492,73 @@ module.exports = {
     return this.query('SELECT * FROM logs ORDER BY createdAt DESC LIMIT 1000');
   },
 
+  getReferrals() {
+    const database = getDb();
+    try {
+      const rows = database.prepare('SELECT * FROM referrals ORDER BY createdAt DESC').all();
+      return { success: true, data: rows.map(r => serializeRow(r)) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  getReferralsByPatient(patientId) {
+    const database = getDb();
+    try {
+      const rows = database.prepare('SELECT * FROM referrals WHERE patientId = ? ORDER BY createdAt DESC').all(patientId);
+      return { success: true, data: rows.map(r => serializeRow(r)) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  getReminders() {
+    const database = getDb();
+    try {
+      const rows = database.prepare('SELECT * FROM reminders ORDER BY dueDate ASC').all();
+      return { success: true, data: rows.map(r => serializeRow(r)) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  getRemindersByPatient(patientId) {
+    const database = getDb();
+    try {
+      const rows = database.prepare('SELECT * FROM reminders WHERE patientId = ? ORDER BY dueDate ASC').all(patientId);
+      return { success: true, data: rows.map(r => serializeRow(r)) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  getChangeLogs() {
+    const database = getDb();
+    try {
+      const rows = database.prepare('SELECT * FROM changelog ORDER BY changedAt DESC LIMIT 1000').all();
+      return { success: true, data: rows.map(r => serializeRow(r)) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  getChangeHistory(entityType, entityId) {
+    const database = getDb();
+    try {
+      let rows;
+      if (entityType && entityId) {
+        rows = database.prepare('SELECT * FROM changelog WHERE entityType = ? AND entityId = ? ORDER BY changedAt DESC').all(entityType, entityId);
+      } else if (entityType) {
+        rows = database.prepare('SELECT * FROM changelog WHERE entityType = ? ORDER BY changedAt DESC').all(entityType);
+      } else {
+        rows = database.prepare('SELECT * FROM changelog ORDER BY changedAt DESC LIMIT 1000').all();
+      }
+      return { success: true, data: rows.map(r => serializeRow(r)) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
   getPatients() {
     const database = getDb();
     try {
@@ -515,9 +622,10 @@ module.exports = {
   saveDoctorProfile(data) {
     const database = getDb();
     try {
-      const keys = Object.keys(data);
+      const serialized = serializeForWrite(data);
+      const keys = Object.keys(serialized);
       const setClause = keys.map(k => `${k} = ?`).join(',');
-      database.prepare(`UPDATE doctor SET ${setClause} WHERE id = 1`).run(...Object.values(data));
+      database.prepare(`UPDATE doctor SET ${setClause} WHERE id = 1`).run(...Object.values(serialized));
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
@@ -535,7 +643,10 @@ module.exports = {
       appointments: this.getAppointments().data || [],
       certificates: this.getCertificates().data || [],
       documents: this.query('SELECT * FROM documents').data || [],
-      logs: this.getActivityLogs().data || []
+      referrals: this.getReferrals().data || [],
+      reminders: this.getReminders().data || [],
+      logs: this.getActivityLogs().data || [],
+      changelog: this.getChangeLogs().data || []
     };
     return { success: true, data: result };
   },
@@ -543,9 +654,9 @@ module.exports = {
   importBackup(backupData) {
     const database = getDb();
     try {
-      database.exec("BEGIN TRANSACTION");
+      database.prepare("BEGIN TRANSACTION").run();
       try {
-        const tables = ['patients', 'consultations', 'prescriptions', 'appointments', 'certificates', 'documents', 'logs', 'doctor'];
+        const tables = ['patients', 'consultations', 'prescriptions', 'appointments', 'certificates', 'documents', 'logs', 'referrals', 'reminders', 'changelog', 'doctor'];
         for (const table of tables) {
           if (table === 'doctor') {
             database.prepare(`DELETE FROM doctor WHERE id != 1`).run();
@@ -631,6 +742,33 @@ module.exports = {
           }
         }
 
+        if (backupData.referrals && Array.isArray(backupData.referrals)) {
+          const stmt = database.prepare(`
+            INSERT INTO referrals VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const r of backupData.referrals) {
+            stmt.run(r.id, r.patientId, r.consultationId || null, r.specialistName || '', r.facility || '', r.reason || '', r.notes || '', r.status || 'Pending', r.date || '', r.createdAt || '');
+          }
+        }
+
+        if (backupData.reminders && Array.isArray(backupData.reminders)) {
+          const stmt = database.prepare(`
+            INSERT INTO reminders VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const r of backupData.reminders) {
+            stmt.run(r.id, r.patientId, r.type || 'followup', r.title || '', r.message || '', r.dueDate || '', r.status || 'pending', r.relatedId || null, r.createdAt || '');
+          }
+        }
+
+        if (backupData.changelog && Array.isArray(backupData.changelog)) {
+          const stmt = database.prepare(`
+            INSERT INTO changelog VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const c of backupData.changelog) {
+            stmt.run(c.id, c.entityType, c.entityId, c.field, c.oldValue || '', c.newValue || '', c.changedAt, c.changedBy || 'doctor', c.undoData || null);
+          }
+        }
+
         if (backupData.doctor) {
           const d = backupData.doctor;
           database.prepare(`
@@ -642,10 +780,10 @@ module.exports = {
             d.signature || null, d.role || 'admin'
           );
         }
-        database.exec("COMMIT");
+        database.prepare("COMMIT").run();
         return { success: true };
       } catch (err) {
-        database.exec("ROLLBACK");
+        database.prepare("ROLLBACK").run();
         return { success: false, error: err.message };
       }
     } catch (err) {
