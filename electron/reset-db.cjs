@@ -38,7 +38,7 @@ app.whenReady().then(() => {
     ];
 
     for (const key of keysToReset) {
-      await ses.clearStorageData({ storages: ['localStorage'], origin: app.getPath('userData'), keys: [key] });
+      await ses.clearStorageData({ storages: ['localStorage'], origin: 'file://', keys: [key] });
     }
 
     await win.webContents.executeJavaScript(`
