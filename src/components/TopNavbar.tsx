@@ -1,6 +1,6 @@
 import { Search, Bell, Calendar, Moon, Sun, X, Clock, Users, Stethoscope, CheckCircle2, User, Menu, Pill, AlertTriangle, FileText, File, Filter, Star, Bookmark } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { db, Patient, Appointment, Reminder, Consultation, Prescription, MedicalDocument } from '@/services/db';
+import { db, Patient, Appointment, Reminder, Consultation, Prescription, MedicalDocument, DoctorProfile } from '@/services/db';
 import { Link, useNavigate } from 'react-router-dom';
 import { getLocalDate } from '@/lib/dates';
 import { onDbChange } from '@/services/db';
@@ -43,7 +43,7 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout, onToggleSidebar }: 
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [documents, setDocuments] = useState<MedicalDocument[]>([]);
-  const [doc, setDoc] = useState<{ name: string; regNumber: string; specialization: string; clinicName: string; clinicAddress: string; phone: string; email: string; profilePic?: string }>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '' });
+  const [doc, setDoc] = useState<DoctorProfile>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', signature: '', role: 'doctor', profilePic: '' });
   const searchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -433,6 +433,11 @@ export function TopNavbar({ darkMode, setDarkMode, onLogout, onToggleSidebar }: 
         <div className="flex items-center gap-3 border-l border-slate-200 dark:border-slate-800 pl-4">
           <div className="text-right">
             <div className="flex items-center gap-1.5 justify-end">
+              {doc.role && (
+                <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 uppercase tracking-wider">
+                  {doc.role}
+                </span>
+              )}
               <p className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{doc.name}</p>
             </div>
             <p className="text-[9px] text-slate-400 uppercase font-semibold">{doc.specialization}</p>
