@@ -150,14 +150,14 @@ export function Backup() {
       </div>
 
       {successMessage && (
-        <div className="p-3 bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs font-semibold rounded flex items-center gap-2">
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded flex items-center gap-2">
           <CheckCircle2 size={16} className="shrink-0" />
           {successMessage}
         </div>
       )}
 
       {errorMessage && (
-        <div className="p-3 bg-red-50 border border-red-250 text-red-800 text-xs font-semibold rounded flex items-center gap-2">
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs font-semibold rounded flex items-center gap-2">
           <AlertCircle size={16} className="shrink-0" />
           {errorMessage}
         </div>
@@ -175,7 +175,7 @@ export function Backup() {
           </div>
 
           {backupComplete ? (
-            <div className="bg-emerald-55 text-emerald-700 border border-emerald-200 px-3 py-2 rounded text-[12px] flex items-center justify-center gap-2 font-semibold w-full">
+            <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-2 rounded text-[12px] flex items-center justify-center gap-2 font-semibold w-full">
               <CheckCircle2 size={16} /> Backup Downloaded Successfully
             </div>
           ) : (
@@ -200,13 +200,13 @@ export function Backup() {
             </h3>
             <p className="text-[12px] text-slate-500 leading-relaxed mb-6 font-medium">
               Upload a previously generated `.json` backup file. The system validates schema version before restoring.
-              <span className="text-red-550 dark:text-red-400 font-bold block mt-1">Warning: This will overwrite your current offline clinic records!</span>
+              <span className="text-red-500 dark:text-red-400 font-bold block mt-1">Warning: This will overwrite your current offline clinic records!</span>
             </p>
           </div>
           <input type="file" id="backup-file" accept=".json" className="hidden" onChange={handleImportBackup} />
           <button
             onClick={() => document.getElementById('backup-file')?.click()}
-            className="bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 px-3 py-2 rounded text-[12px] transition-colors w-full font-bold text-center"
+            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-2 rounded text-[12px] transition-colors w-full font-bold text-center"
           >
             Select & Import Backup File
           </button>
