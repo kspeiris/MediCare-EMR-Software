@@ -7,20 +7,20 @@ import { onDbChange } from '@/services/db';
 export function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveComplete, setSaveComplete] = useState(false);
-  const [doctor, setDoctor] = useState<DoctorProfile>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'doctor' });
-  const [formDoctor, setFormDoctor] = useState<DoctorProfile>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'doctor' });
+  const [doctor, setDoctor] = useState<DoctorProfile>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'doctor', signature: '', profilePic: '' });
+  const [formDoctor, setFormDoctor] = useState<DoctorProfile>({ name: '', regNumber: '', specialization: '', clinicName: '', clinicAddress: '', phone: '', email: '', role: 'doctor', signature: '', profilePic: '' });
   const [profilePic, setProfilePic] = useState('');
 
   useEffect(() => {
     const load = async () => {
-      const profile = await db.getDoctorProfile();
+      const profile = db.getDoctorProfile();
       setDoctor(profile);
       setFormDoctor(profile);
       setProfilePic(profile.profilePic || '');
     };
     load();
     const unsub = onDbChange('doctor:changed', async () => {
-      const profile = await db.getDoctorProfile();
+      const profile = db.getDoctorProfile();
       setDoctor(profile);
       setFormDoctor(profile);
       setProfilePic(profile.profilePic || '');
