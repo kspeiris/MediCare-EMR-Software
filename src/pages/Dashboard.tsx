@@ -218,11 +218,21 @@ export function Dashboard() {
           <span className="text-[11px] text-slate-500">Pending notifications</span>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4 flex flex-col gap-1">
+          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Total Patients</span>
+          <span className="text-[20px] font-bold text-slate-700 dark:text-slate-200">{patients.length}</span>
+          <span className="text-[11px] text-slate-500">Registered patients</span>
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4 flex flex-col gap-1">
+          <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Today's Appointments</span>
+          <span className="text-[20px] font-bold text-indigo-600 dark:text-indigo-300">{todayAppointments.length}</span>
+          <span className="text-[11px] text-slate-500">Scheduled today</span>
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4 flex flex-col gap-1">
           <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Missed Appointments</span>
           <span className="text-[20px] font-bold text-rose-600 dark:text-rose-300">{missedAppointmentsCount}</span>
           <span className="text-[11px] text-slate-500">Cancelled & past</span>
-         </div>
-       </div>
+        </div>
+        </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Link to="/patients" className="bg-sky-50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-950/50 p-3 rounded-md flex items-center gap-3 hover:bg-sky-100 dark:hover:bg-sky-950/40 transition-colors group">
